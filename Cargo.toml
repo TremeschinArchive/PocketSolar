@@ -1,0 +1,26 @@
+[package]
+name = "ViyLine"
+version = "2022.11.5"
+authors = ["Tremeschin"]
+edition = "2021"
+
+[[bin]]
+name = "ViyLine"
+path = "ViyLine/ViyLine.rs"
+
+[dependencies]
+egui = "0.19.0"
+eframe = { version = "0.19.0", features = ["persistence"] }
+serde = { version = "1.0.147", features = ["derive"] }
+
+# native:
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = "0.3"
+
+# web:
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+tracing-wasm = "0.2"
+
+[profile.release]
+opt-level = 2 # fast and small wasm
