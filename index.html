@@ -1,34 +1,27 @@
 <!DOCTYPE html>
 <html>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-
-<!-- Disable zooming: -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <head>
+    <meta charset="utf-8">
+    <link rel="manifest" href="Website/manifest.json">
+
+    <!-- Disable zooming: -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
     <!-- change this to your project name -->
     <title>ViyLine</title>
 
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/Assets/#rust for more customization -->
     <link data-trunk rel="rust" data-wasm-opt="2" />
+
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
     <base data-trunk-public-url />
 
-    <link data-trunk rel="icon" href="Assets/favicon.ico">
+    <link data-trunk rel="icon" href="Website/icon.png">
 
+    <link data-trunk rel="copy-file" href="Website/manifest.json" />
+    <link data-trunk rel="copy-file" href="Website/sw.js" />
 
-    <link data-trunk rel="copy-file" href="Assets/sw.js" />
-    <link data-trunk rel="copy-file" href="Assets/manifest.json" />
-    <link data-trunk rel="copy-file" href="Assets/icon-1024.png" />
-    <link data-trunk rel="copy-file" href="Assets/icon-256.png" />
-    <link data-trunk rel="copy-file" href="Assets/icon_ios_touch_192.png" />
-    <link data-trunk rel="copy-file" href="Assets/maskable_icon_x512.png" />
-
-
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon_ios_touch_192.png">
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
 
     <style>
         html {
@@ -135,5 +128,3 @@
 </body>
 
 </html>
-
-<!-- Powered by egui: https://github.com/emilk/egui/ -->
