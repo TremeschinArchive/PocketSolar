@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <link rel="manifest" href="Website/manifest.json">
+    <link rel="manifest" href="./Website/manifest.json">
 
     <!-- Disable zooming: -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -17,10 +17,10 @@
     <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
     <base data-trunk-public-url />
 
-    <link data-trunk rel="icon" href="Website/icon.png">
+    <link data-trunk rel="icon" href="./Website/icon.png">
 
-    <link data-trunk rel="copy-file" href="Website/manifest.json" />
-    <link data-trunk rel="copy-file" href="Website/sw.js" />
+    <link data-trunk rel="copy-file" href="./Website/manifest.json" />
+    <link data-trunk rel="copy-file" href="./Website/sw.js" />
 
 
     <style>
@@ -121,7 +121,7 @@
         // We disable caching during development so that we always view the latest version.
         if ('serviceWorker' in navigator && window.location.hash !== "#dev") {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js');
+                navigator.serviceWorker.register('./Website/sw.js');
             });
         }
     </script>
