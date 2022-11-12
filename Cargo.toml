@@ -1,6 +1,6 @@
 [package]
 name = "ViyLine"
-version = "2022.11.10"
+version = "2022.11.11"
 authors = ["Tremeschin"]
 edition = "2021"
 

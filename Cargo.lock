@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "ViyLine"
-version = "2022.11.10"
+version = "2022.11.11"
 dependencies = [
  "console_error_panic_hook",
  "eframe",

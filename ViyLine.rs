@@ -100,7 +100,6 @@ impl Curve {
 
 #[derive(Default)]
 pub struct ViyLineApp {
-    numberInterpolationPoints: i64,
     ivCurve: Curve,
 
     time: f64,
@@ -110,7 +109,7 @@ pub struct ViyLineApp {
 
     // Export Window
     showExportWindow: bool,
-    exportdV: f64,
+    exportNOfPoints: i64,
     outputCSV: String,
 
     // Temporary variables
@@ -125,11 +124,9 @@ pub struct ViyLineApp {
 impl ViyLineApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> ViyLineApp {
         return ViyLineApp {
-            numberInterpolationPoints: 10,
-
             plotPoints: true,
 
-            exportdV: 0.5,
+            exportNOfPoints: 20,
 
             A: 10.0,
             B: 0.01,
@@ -176,18 +173,23 @@ impl eframe::App for ViyLineApp {
 
                 if self.showExportWindow {
                     egui::Window::new("Export data window").show(ctx, |ui| {
-                        ui.add(egui::Slider::new(&mut self.exportdV, 0.1..=5.0).text("Voltage Precision"));
+                        ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
 
                         // // (re)Build the output CSV
                         if ui.button("Export CSV").clicked() {
-                            self.outputCSV = String::from("V,I\n");
+                            self.outputCSV = String::from("index,     V,      I\n");
+
+                            // V open circuit
+                            // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
+                            let Voc = (curve.A/curve.B).ln() / curve.k;
+                            let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
 
                             // For every dv
-                            for i in 0.. {
+                            for i in 0..self.exportNOfPoints {
                                 // Calculate next IV point
-                                let V = self.exportdV * (i as f64);
+                                let V = dV * (i as f64);
                                 let I = curve.interpolatedValueAt(V);
-                                self.outputCSV.push_str(&format!("{:.2},{:.4}\n", V, I));
+                                self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
                                 if I < 0.0 {break;}
                             }
                         }
@@ -195,6 +197,8 @@ impl eframe::App for ViyLineApp {
                         // // Add text box
                         ui.add(
                             egui::TextEdit::multiline(&mut self.outputCSV)
+                                .font(egui::TextStyle::Monospace)
+
                         );
                     });
                 }
@@ -216,43 +220,25 @@ impl eframe::App for ViyLineApp {
             ui.label(format!("Function:  i(v) = {:.2} - ({:.3e})exp({:.4}v)", curve.A, curve.B, curve.k));
             ui.style_mut().spacing.slider_width = 260.0;
 
-            // Temporary
-            ui.add(egui::Slider::new(&mut self.A, 0.0..=10.0).text("Unknown A"));
-            ui.add(egui::Slider::new(&mut self.B, 0.0..= 2.0).text("Unknown B"));
-            ui.add(egui::Slider::new(&mut self.k, 0.0..= 1.0).text("Unknown k"));
-            ui.separator();
-            ui.add(egui::Slider::new(&mut self.N, 0..=500).text("Points"));
-            ui.separator();
-            ui.add(egui::Slider::new(&mut self.errorPCT, 0.0..=100.0).text("Error %"));
-            ui.add(egui::Slider::new(&mut self.errorRange, 0.0..=0.99).text("Error ABS"));
+            // Temporary unknown variables sliders
+            if true {
+                ui.add(egui::Slider::new(&mut self.A, 0.0..=10.0).text("Unknown A"));
+                ui.add(egui::Slider::new(&mut self.B, 0.0..= 2.0).text("Unknown B"));
+                ui.add(egui::Slider::new(&mut self.k, 0.0..= 1.0).text("Unknown k"));
+                ui.separator();
+                ui.add(egui::Slider::new(&mut self.N, 0..=500).text("Points"));
+                ui.separator();
+                ui.add(egui::Slider::new(&mut self.errorPCT, 0.0..=100.0).text("Error %"));
+                ui.add(egui::Slider::new(&mut self.errorRange, 0.0..=0.99).text("Error ABS"));
+            }
         });
 
 
-
-
-        // egui::SidePanel::left("side_panel").show(ctx, |ui| {
-        // Temporary point adder
-        //     ui.separator();
-        //     ui.add(egui::Slider::new(&mut self._randomX, 0.0..=10.0).text("X: "));
-        //     ui.add(egui::Slider::new(&mut self._randomY, 0.0..=10.0).text("Y: "));
-        //     if ui.button("Add point").clicked() {
-        //         self.ivCurve.addPoint(self._randomX, self._randomY);
-        //     }
-        //     ui.separator();
-
-
+        // Main plot
         egui::CentralPanel::default().show(ctx, |ui| {
-            // // Interpolation precision
-            // ui.add(
-            //     egui::Slider::new(&mut self.numberInterpolationPoints, 0..=100)
-            //         .text("Interpolation points"),
-            // );
 
-            // Plot interpolation
-            let plot = Plot::new("lines_demo");
-            self.ivCurve.addPoint(-1.0, 0.0);
-
-            {
+            // Temporary random points
+            if true {
                 let mut rng = Pcg32::seed_from_u64(42);
                 self.ivCurve.clear();
 
@@ -273,12 +259,18 @@ impl eframe::App for ViyLineApp {
                 }
             }
 
-            plot.show(ui, |plot_ui| {
+            // Main plot
+            Plot::new("lines_demo").show(ui, |plot_ui| {
 
                 // Plot continuous IV curve
                 plot_ui.line({
                     Line::new(PlotPoints::from_explicit_callback(
-                        move |x| curve.interpolatedValueAt(x), .., 512,
+                        move |x| {
+                            if x < 0.0 {return 0.0;}
+                            let I = curve.interpolatedValueAt(x);
+                            if I < 0.0 {return 0.0;}
+                            return I;
+                        }, .., 512,
                     ))
                     .width(5.0)
                 });
@@ -296,9 +288,6 @@ impl eframe::App for ViyLineApp {
                 }
             });
         });
-
-
-
     }
 }
 
@@ -342,6 +331,18 @@ fn main() {
 
 
 
+
+
+
+// egui::SidePanel::left("side_panel").show(ctx, |ui| {
+// Temporary point adder
+//     ui.separator();
+//     ui.add(egui::Slider::new(&mut self._randomX, 0.0..=10.0).text("X: "));
+//     ui.add(egui::Slider::new(&mut self._randomY, 0.0..=10.0).text("Y: "));
+//     if ui.button("Add point").clicked() {
+//         self.ivCurve.addPoint(self._randomX, self._randomY);
+//     }
+//     ui.separator();
 
 
 
