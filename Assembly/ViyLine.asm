@@ -31,6 +31,7 @@ cblock 0x20
 	dutyStep,   ; At this t+dt, are we ON or OFF (compare to dutyTime)
 	cycle,      ; How many cycles have passed for the inductor to stabilize?
 	measuring   ; Are we measuring voltage or current? Checks bit 0 only
+
 endc
 
 ; Reset vector, first instruction is goto setup
@@ -83,30 +84,36 @@ interruption:
 
 	; Clear interruption flag
 	bcf		INTCON,T0IF
-
-	; Increase dutyStep
 	incf	dutyStep,F
 
 	; Check if dutyStep is bigger or smaller than dutyTime
 	; and apply the zero or one logical voltage
 	defineMosfetState:
-		incf	dutyStep,W
+
+		; Applies
+		movf	dutyStep,W
 		subwf	dutyTime,W
 
-		; If it is smaller, set zero
-		btfsc	STATUS,C
-		bsf		PORTB,0
-
-		; If bigger, set one
+		; If smaller, set zero
 		btfss	STATUS,C
 		bcf		PORTB,0
 
+		; If bigger, set one
+		btfsc	STATUS,C
+		bsf		PORTB,0
+
+	; Check if we are on a start duty
+	ifFinishedLoop:
+		movf	dutyStep,W
+		xorlw	0xFF
+		btfss	STATUS,Z
+		retfie
+
 	; We measure after 100 cycles, return if cycle isn't 100
-	;
 	continueTooFewCycles:
 		incf	cycle,F
 		movf	cycle,W
-		xorlw	D'100'
+		xorlw	D'5'
 		btfss	STATUS,Z
 		retfie
 		clrf	cycle
@@ -123,6 +130,9 @@ interruption:
 	retfie
 	call	readCurrent
 	incf	dutyTime,F
+
+	; TODO: Send the data to bluetooth
+
 	retfie
 
 ; |------------------------------------------------------------------| ;
