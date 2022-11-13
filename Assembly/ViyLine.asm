@@ -129,7 +129,12 @@ interruption:
 	btfss	measuring,0
 	retfie
 	call	readCurrent
-	incf	dutyTime,F
+
+	; dutyTime steps added each loop, must be a value within:
+	; [0x01, 0x03, 0x05, 0x0F, 0x11, 0x33, 0x55, 0xFF]
+	; This determines the "number of points"
+	movlw	0x01
+	addwf	dutyTime,F
 
 	; TODO: Send the data to bluetooth
 
