@@ -1,0 +1,3 @@
+[build]
+# Allow WebBluetooth on WASM
+rustflags = ["--cfg=web_sys_unstable_apis"]

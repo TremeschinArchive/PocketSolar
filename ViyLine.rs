@@ -1,5 +1,5 @@
 // | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(non_snake_case)]
 
 use egui::plot::Line;
@@ -11,6 +11,11 @@ use libm::*;
 use rand::Rng;
 use rand_pcg::Pcg32;
 use rand::SeedableRng;
+
+use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+use btleplug::api::WriteType;
+use btleplug::platform::Manager;
+use btleplug::api::bleuuid::uuid_from_u16;
 
 // ----------------------------------------------------------------------------|
 
@@ -119,11 +124,18 @@ pub struct ViyLineApp {
     k: f64,
     errorPCT: f64,
     errorRange: f64,
+
+    // Bluetooth
+    hc06: Option<btleplug::platform::Peripheral>,
+    readCharacteristic:  Option<btleplug::api::Characteristic>,
+    writeCharacteristic: Option<btleplug::api::Characteristic>,
+    bluetoothDevices: Vec<String>,
 }
 
+
 impl ViyLineApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> ViyLineApp {
-        return ViyLineApp {
+    pub async fn new() -> ViyLineApp {
+        let mut viyline = ViyLineApp {
             plotPoints: true,
 
             exportNOfPoints: 20,
@@ -138,7 +150,62 @@ impl ViyLineApp {
 
             ..ViyLineApp::default()
         };
+
+        // BTLEPLUG initialization
+        let manager = Manager::new().await.unwrap();
+        let adapter_list = manager.adapters().await.unwrap();
+
+        // Add number adapters found
+        viyline.bluetoothDevices.push(format!("Number of Adapters found: [{}]", adapter_list.len()));
+
+        // For all found Bluetooth adapters
+        // FIXME: WASM/WebBluetooth doesn't find any
+        for adapter in adapter_list.iter() {
+            viyline.bluetoothDevices.push(
+                format!("Adapter: [{}]", adapter.adapter_info().await.unwrap())
+            );
+
+            // Scan for peripherals
+            adapter.start_scan(ScanFilter::default()).await.unwrap();
+            async_std::task::sleep(std::time::Duration::from_millis(2000)).await;
+
+            for peripheral in adapter.peripherals().await.unwrap().iter() {
+                let properties = peripheral.properties().await.unwrap();
+                let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
+
+                // Only connect to HC-06
+                if local_name != "HC-06" {continue;}
+
+                // Connect if not paired
+                if !peripheral.is_connected().await.unwrap() {
+                    if let Err(err) = peripheral.connect().await {
+                        viyline.bluetoothDevices.push(format!(" - ERROR: {}", err));
+                        continue;
+                    }
+                }
+
+                // Show info on name
+                viyline.bluetoothDevices.push(format!(" - {}", local_name));
+
+                // Discover services and characteristics
+                peripheral.discover_services().await.unwrap();
+                let characteristics = Some(peripheral.characteristics().clone());
+                viyline.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
+                viyline.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0x2A02)).unwrap().clone());
+
+                // Assign bluetooth module variables
+                viyline.hc06 = Some(peripheral.clone());
+            }
+
+        }
+
+        return viyline;
     }
+
+    // fn readCharacteristic(& self) -> &btleplug::api::Characteristic {
+    //     return self.hc06.expect("No HC06 found").characteristics().iter().find(|c| c.uuid == uuid_from_u16(0x2A02)).unwrap();
+    // }
+
 }
 
 impl eframe::App for ViyLineApp {
@@ -153,13 +220,22 @@ impl eframe::App for ViyLineApp {
         // Top bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
 
+
             ui.horizontal(|ui| {
                 // Title
                 ui.heading("ViyLine");
                 ui.separator();
 
+                // Dark mode / Light mode switch
+                egui::global_dark_light_mode_switch(ui);
+
                 // Buttons / Actions
                 if ui.button("Measure").clicked() {
+                    for i in 0..256  {
+                        block_on(self.hc06.as_ref().unwrap().write(&self.writeCharacteristic.as_ref().unwrap(), &vec![i as u8], WriteType::WithoutResponse)).unwrap();
+                        println!("{i}\n");
+                        block_on(async_std::task::sleep(std::time::Duration::from_millis(50)));
+                    }
 
                 }
 
@@ -288,37 +364,52 @@ impl eframe::App for ViyLineApp {
                 }
             });
         });
+
+        egui::Window::new("Bluetooth").show(ctx, |ui| {
+            for name in &self.bluetoothDevices {
+                ui.label(name);
+            }
+        });
+
     }
 }
 
-// When compiling natively:
-#[cfg(not(target_arch = "wasm32"))]
-fn main() {
-    // Log to stdout (if you run with `RUST_LOG=debug`).
-    tracing_subscriber::fmt::init();
+use futures::executor::block_on;
 
-    let native_options = eframe::NativeOptions::default();
-    eframe::run_native(
-        "ViyLine",
-        native_options,
-        Box::new(|cc| Box::new(ViyLineApp::new(cc))),
-    );
+
+async fn trueMain() {
+    let app = Box::new(ViyLineApp::new().await);
+
+    // Compile NATIVELY
+    #[cfg(not(target_arch = "wasm32"))]
+    eframe::run_native("ViyLine", eframe::NativeOptions::default(), Box::new(|cc| {
+        cc.egui_ctx.set_visuals(egui::Visuals::dark()); return app;
+    }));
+
+    // Compile WASM
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Make sure panics are logged using `console.error`.
+        console_error_panic_hook::set_once();
+
+        // Redirect tracing to console.log and friends:
+        tracing_wasm::set_as_global_default();
+
+        eframe::start_web("ViyLine", eframe::WebOptions::default(), Box::new(|cc| {
+            cc.egui_ctx.set_visuals(egui::Visuals::dark()); return app;
+        })).expect("failed to start eframe");
+    }
 }
 
-// when compiling to web using trunk.
+#[tokio::main(flavor="current_thread")]
+#[cfg(not(target_arch="wasm32"))]
+async fn main() {
+    trueMain().await;
+}
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
-    // Make sure panics are logged using `console.error`.
-    console_error_panic_hook::set_once();
-
-    // Redirect tracing to console.log and friends:
-    tracing_wasm::set_as_global_default();
-
-    let web_options = eframe::WebOptions::default();
-    eframe::start_web(
-        "mainCanvas",
-        web_options,
-        Box::new(|cc| Box::new(ViyLineApp::new(cc))),
-    )
-    .expect("failed to start eframe");
+    prokio::Runtime::default().spawn_pinned(move || async move {
+        trueMain().await;
+    });
 }
