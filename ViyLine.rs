@@ -1,5 +1,5 @@
 // | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
-#![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
+// #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(non_snake_case)]
 
 use egui::plot::Line;
@@ -135,7 +135,7 @@ pub struct ViyLineApp {
 
 impl ViyLineApp {
     pub async fn new() -> ViyLineApp {
-        let mut viyline = ViyLineApp {
+        return ViyLineApp {
             plotPoints: true,
 
             exportNOfPoints: 20,
@@ -150,18 +150,30 @@ impl ViyLineApp {
 
             ..ViyLineApp::default()
         };
+    }
 
-        // BTLEPLUG initialization
+    fn bluetoothWrite(&self, data: &Vec<u8>) {
+        block_on(self.hc06.as_ref().unwrap().write(&self.writeCharacteristic.as_ref().unwrap(), data, WriteType::WithoutResponse)).unwrap();
+        // block_on(async_std::task::sleep(std::time::Duration::from_millis(50)));
+    }
+
+    fn bluetoothRead(&self) -> Vec<u8> {
+        let data = block_on(self.hc06.as_ref().unwrap().read(&self.readCharacteristic.as_ref().unwrap())).unwrap();
+        // block_on(async_std::task::sleep(std::time::Duration::from_millis(50)));
+        return data;
+    }
+
+    async fn findBluetooth(&mut self) {
+
         let manager = Manager::new().await.unwrap();
         let adapter_list = manager.adapters().await.unwrap();
 
         // Add number adapters found
-        viyline.bluetoothDevices.push(format!("Number of Adapters found: [{}]", adapter_list.len()));
+        self.bluetoothDevices.push(format!("Number of Adapters found: [{}]", adapter_list.len()));
 
         // For all found Bluetooth adapters
-        // FIXME: WASM/WebBluetooth doesn't find any
         for adapter in adapter_list.iter() {
-            viyline.bluetoothDevices.push(
+            self.bluetoothDevices.push(
                 format!("Adapter: [{}]", adapter.adapter_info().await.unwrap())
             );
 
@@ -169,8 +181,11 @@ impl ViyLineApp {
             adapter.start_scan(ScanFilter::default()).await.unwrap();
             async_std::task::sleep(std::time::Duration::from_millis(2000)).await;
 
-            for peripheral in adapter.peripherals().await.unwrap().iter() {
-                let properties = peripheral.properties().await.unwrap();
+            // FIXME: Wasm unreachable
+            let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
+
+            for peripheral in peripherals.iter() {
+                let properties = peripheral.properties().await.expect("Can't get properties");
                 let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
 
                 // Only connect to HC-06
@@ -179,37 +194,31 @@ impl ViyLineApp {
                 // Connect if not paired
                 if !peripheral.is_connected().await.unwrap() {
                     if let Err(err) = peripheral.connect().await {
-                        viyline.bluetoothDevices.push(format!(" - ERROR: {}", err));
+                        self.bluetoothDevices.push(format!(" - ERROR: {}", err));
                         continue;
                     }
                 }
 
                 // Show info on name
-                viyline.bluetoothDevices.push(format!(" - {}", local_name));
+                self.bluetoothDevices.push(format!(" - {}", local_name));
 
                 // Discover services and characteristics
                 peripheral.discover_services().await.unwrap();
                 let characteristics = Some(peripheral.characteristics().clone());
-                viyline.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
-                viyline.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0x2A02)).unwrap().clone());
+                self.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
+                self.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE1)).unwrap().clone());
 
                 // Assign bluetooth module variables
-                viyline.hc06 = Some(peripheral.clone());
+                self.hc06 = Some(peripheral.clone());
             }
 
         }
-
-        return viyline;
     }
-
-    // fn readCharacteristic(& self) -> &btleplug::api::Characteristic {
-    //     return self.hc06.expect("No HC06 found").characteristics().iter().find(|c| c.uuid == uuid_from_u16(0x2A02)).unwrap();
-    // }
-
 }
 
 impl eframe::App for ViyLineApp {
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
+
+    // Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.time += 1.0/60.0;
 
@@ -220,7 +229,6 @@ impl eframe::App for ViyLineApp {
         // Top bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
 
-
             ui.horizontal(|ui| {
                 // Title
                 ui.heading("ViyLine");
@@ -229,54 +237,66 @@ impl eframe::App for ViyLineApp {
                 // Dark mode / Light mode switch
                 egui::global_dark_light_mode_switch(ui);
 
-                // Buttons / Actions
-                if ui.button("Measure").clicked() {
-                    for i in 0..256  {
-                        block_on(self.hc06.as_ref().unwrap().write(&self.writeCharacteristic.as_ref().unwrap(), &vec![i as u8], WriteType::WithoutResponse)).unwrap();
-                        println!("{i}\n");
-                        block_on(async_std::task::sleep(std::time::Duration::from_millis(50)));
+                if self.hc06.is_none() {
+                    if ui.button("Connect").clicked() {
+                        block_on(self.findBluetooth());
+                    }
+                } else {
+                    // Buttons / Actions
+                    if ui.button("Measure").clicked() {
+                        for i in 0..10  {
+                            println!("");
+
+                            // Write data
+                            self.bluetoothWrite(&vec![(i) as u8, (i+1) as u8, (i+2) as u8, (i+3) as u8]);
+
+                            // Read data
+                            let data = self.bluetoothRead();
+                            println!("Buffer: {:?}", data);
+                        }
+                    }
+                }
+
+                if curve.points.len() > 0 {
+                    if ui.button("Clear").clicked() {
+                        self.ivCurve.clear();
                     }
 
-                }
+                    if ui.button("Export").clicked() {
+                        self.showExportWindow = !self.showExportWindow;
+                    }
 
-                if ui.button("Clear").clicked() {
-                    self.ivCurve.clear();
-                }
+                    if self.showExportWindow {
+                        egui::Window::new("Export data window").show(ctx, |ui| {
+                            ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
 
-                if ui.button("Export").clicked() {
-                    self.showExportWindow = !self.showExportWindow;
-                }
+                            // // (re)Build the output CSV
+                            if ui.button("Export CSV").clicked() {
+                                self.outputCSV = String::from("index,     V,      I\n");
 
-                if self.showExportWindow {
-                    egui::Window::new("Export data window").show(ctx, |ui| {
-                        ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
+                                // V open circuit
+                                // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
+                                let Voc = (curve.A/curve.B).ln() / curve.k;
+                                let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
 
-                        // // (re)Build the output CSV
-                        if ui.button("Export CSV").clicked() {
-                            self.outputCSV = String::from("index,     V,      I\n");
-
-                            // V open circuit
-                            // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                            let Voc = (curve.A/curve.B).ln() / curve.k;
-                            let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
-
-                            // For every dv
-                            for i in 0..self.exportNOfPoints {
-                                // Calculate next IV point
-                                let V = dV * (i as f64);
-                                let I = curve.interpolatedValueAt(V);
-                                self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
-                                if I < 0.0 {break;}
+                                // For every dv
+                                for i in 0..self.exportNOfPoints {
+                                    // Calculate next IV point
+                                    let V = dV * (i as f64);
+                                    let I = curve.interpolatedValueAt(V);
+                                    self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
+                                    if I < 0.0 {break;}
+                                }
                             }
-                        }
 
-                        // // Add text box
-                        ui.add(
-                            egui::TextEdit::multiline(&mut self.outputCSV)
-                                .font(egui::TextStyle::Monospace)
+                            // // Add text box
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.outputCSV)
+                                    .font(egui::TextStyle::Monospace)
 
-                        );
-                    });
+                            );
+                        });
+                    }
                 }
             });
 
