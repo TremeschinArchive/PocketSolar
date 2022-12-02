@@ -4,190 +4,250 @@ list p=16f877a
 __CONFIG _HS_OSC & _WDT_OFF & _PWRTE_ON & _BODEN_OFF & _LVP_OFF
 ERRORLEVEL -305, -302
 
-; |------------------------------------------------------------------| ;
+; Constants
+Fosc	 equ .20
+baudrate equ .9600
 
-memoryPage0     macro
-    bcf         STATUS,RP0
-    bcf         STATUS,RP1
-    endm
-
-memoryPage1     macro
-    bsf         STATUS,RP0
-    bcf         STATUS,RP1
-    endm
-
-; |------------------------------------------------------------------| ;
-
-; General Purpose Registers from 0x20 address onwards
-cblock 0x20
-
-    ; Analog to Digital Converter related
-    Binario10H, ; Upper 8-bits of the measured analog signal
-    Binario10L, ; Lower 8-bits of the measured analog signal
-
-    ; Duty-time / cycles related
-    dutyTime,   ; Percentage of ON state (relative to 255)
-    dutyStep,   ; At this t+dt, are we ON or OFF (compare to dutyTime)
-    cycle,      ; How many cycles have passed for the inductor to stabilize?
-    measuring   ; Are we measuring voltage or current? Checks bit 0 only
-
-endc
+; Capacitor states on PORTB
+capacitorDoNothingHex equ 0x00
+capacitorChargeHex    equ 0x01
+capacitorDischargeHex equ 0x02
 
 ; Reset vector, first instruction is goto setup
 org         0x00
 goto        setup
 
-; Interruption function
+; Interruption -> Do nothing
 org         0x04
-goto        interruption
+
 
 ; |------------------------------------------------------------------| ;
+; Macros / Syntactic sugars
+
+; Switch to memory page 0
+memoryPage0     macro
+    bcf         STATUS,RP0
+    bcf         STATUS,RP1
+    endm
+
+; Switch to memory page 1
+memoryPage1     macro
+    bsf         STATUS,RP0
+    bcf         STATUS,RP1
+    endm
+
+; If file is equal to literal, execute next command
+ifeq            macro file, literal
+    movf        file,W
+    xorlw       literal
+    btfsc       STATUS,Z
+    endm
+
+; If file is not equal to literal, execute next command
+ifneq           macro file, literal
+    movf        file,W
+    xorlw       literal
+    btfss       STATUS,Z
+    endm
+
+; If file > literal, execute next command
+ifgreater       macro file, literal
+    movlw       literal
+    subwf       file,W
+    btfsc       STATUS,C
+    endm
+
+; Move literal to file
+movlf           macro literal, file
+    movlw       literal
+    movwf       file
+    endm
+
+; Copy fileA to fileB
+copy            macro fileA, fileB
+    movf        fileA,W
+    movwf       fileB
+    endm
+
+
+; |------------------------------------------------------------------| ;
+; Setup
 
 setup:
     memoryPage1
+        ; RB0 and RB1 control the capacitor
+        movlf       0x03,TRISB
 
         ; AN0, AN1, AN3 as analog
-        movlw       0x84
-        movwf       ADCON1
+        movlf       0x84,ADCON1
         clrf        TRISB
 
-        ; Timer0 Prescaler
-        bcf         OPTION_REG,PS0
-        bcf         OPTION_REG,PS1
-        bcf         OPTION_REG,PS2
-        bcf         OPTION_REG,PSA
-        bcf         OPTION_REG,T0CS
-
-        ; Enable Global Interruptions
-        bsf         INTCON,GIE
-
-        ; Enable interruption due Timer 0
-        bsf         INTCON,T0IE
-
     memoryPage0
-        clrf        dutyTime
-        clrf        dutyStep
-        clrf        TMR0
+        call        clearMeasurements
 
+	call	    setupUART
     goto        main
 
-; The code is based on interruptions since we get time precision there
+
+; |------------------------------------------------------------------| ;
+; Main
+
+cblock 0x20
+    ; The received data instruction from the outside world
+    rxdata
+endc
+
 main:
-    nop
+    ; Read some data from UART loop
+    call        RxCarUART
+	btfss	    flag_rx,0
+	goto	    $ - .2
+
+    ; Store received data
+    movwf       rxdata
+
+    ; Code 0 -> Clear measurements
+    ifeq        rxdata,0x0
+    call        clearMeasurements
+
+    ; Code 1 -> Reset pointer to send data
+    ifeq        rxdata,0x1
+    call        resetMeasurmentsPointer
+
+    ; Code 2 -> Send next 8 bits from read values
+    ifeq        rxdata,0x2
+    call        sendNextByte
+
+    ; Code > 2 -> Make measurement with Delta T = $command
+    ifgreater   rxdata,0x2
+    call        measureFull
+
     goto        main
 
 ; |------------------------------------------------------------------| ;
-
-interruption:
-
-    ; Clear interruption flag
-    bcf         INTCON,T0IF
-
-    ; dutyStep steps added each loop, must be a value within:
-    ; [0x01, 0x03, 0x05, 0x0F, 0x11, 0x33, 0x55, 0xFF]
-    ; Can be seen as a scaler
-    movlw       0x05
-    addwf       dutyStep,F
-
-    ; Check if dutyStep is bigger or smaller than dutyTime
-    ; and apply the zero or one logical voltage
-    defineMosfetState:
-
-        ; Applies
-        movf         dutyStep,W
-        subwf        dutyTime,W
-
-        ; If smaller, set zero
-        btfss        STATUS,C
-        bsf          PORTB,0
-
-        ; If bigger, set one
-        btfsc        STATUS,C
-        bcf          PORTB,0
-
-    ; Check if we are on a start duty
-    ifFinishedLoop:
-        movf         dutyStep,W
-        xorlw        0xFF
-        btfss        STATUS,Z
-        retfie
-
-    ; We measure after 100 cycles, return if cycle isn't 100
-    continueTooFewCycles:
-        incf         cycle,F
-        movf         cycle,W
-        xorlw        D'5'
-        btfss        STATUS,Z
-        retfie
-        clrf         cycle
-
-    measure:
-        ; Swap what we are measuring (current / voltage)
-        incf         measuring,F
-
-        ; Measure voltage first
-        btfss        measuring,0
-        call         readVoltage
-
-        ; Measure current, increasy duty time
-        btfss        measuring,0
-        retfie
-        call         readCurrent
-
-    nextDutyTimeStep:
-        ; dutyTime steps added each loop, must be a value within:
-        ; [0x01, 0x03, 0x05, 0x0F, 0x11, 0x33, 0x55, 0xFF]
-        ; This determines the "number of points"
-        movlw        0x01
-        addwf       dutyTime,F
-
-    ; TODO: Send the data to bluetooth
-    sendDataToBluetooth:
-        nop
-
-    retfie
-
-; |------------------------------------------------------------------| ;
+; Measurement routines
 
 cblock
-    conta_ad
+    measureDelays
 endc
+
+; Do a single measurement
+singleMeasure:
+    copy        rxdata,measureDelays
+
+    ; Call measureDelay $rxdata times
+    singleMeasureLoop:
+        call        measureDelay
+        decf        measureDelays,F
+        ifneq       measureDelays,0x0
+        goto        singleMeasureLoop
+
+    ; Measure voltage and current
+    call        readVoltage
+    Call        readCurrent
+    return
+
+; Measure multiple times
+measureFull:
+    call        dischargeCapacitor
+    call        chargeCapacitor
+    measureLoop:
+        call        singleMeasure
+        ifneq       FSR,0x80
+        goto        measureLoop
+    movlf       capacitorDoNothingHex,PORTB
+    return
+
+; FIXME: Proper delay
+measureDelay:
+    movlw       0x0
+    decfsz      W,F
+    goto        $ - 1
+    return
+
+; - - - - - - - - - - - - - - - - - - - ;
+; Capacitor functions
+
+chargeCapacitor:
+    movlf       capacitorChargeHex,PORTB
+    return
+
+dischargeCapacitor:
+    movlf       capacitorDischargeHex,PORTB
+    call        capacitorDischageDelay
+    movlf       capacitorDoNothingHex,PORTB
+
+; TODO
+capacitorDischageDelay:
+    nop
+    return
+
+; - - - - - - - - - - - - - - - - - - - ;
+; Measurement data manipulation
+
+; Reset FSR to the starting value of measurements
+resetMeasurmentsPointer:
+    movlf       0x30,FSR
+    return
+
+; Clear all measurements made
+clearMeasurements:
+    call        resetMeasurmentsPointer
+        clrf        INDF
+        incf        FSR,F
+        ifneq       FSR,0x70
+        goto        $ - .3
+    call        resetMeasurmentsPointer
+    return
+
+; Send the next pack of 8 bits to the outside world
+sendNextByte:
+    movf        FSR,W
+	call        TxCarUART
+    incf        FSR,F
+    return
+
+; - - - - - - - - - - - - - - - - - - - ;
+; ADC functions
 
 ; Voltage is read on RA1 == AN1 port, configure muxer and read
 readVoltage:
-    movlw       0x89
-    movwf       ADCON0
+    movlf       0x89,ADCON0
     goto        _readADC
 
 ; Current is read on RA3 == AN3 port, configure muxer and read
 readCurrent:
-    movlw       0x99
-    movwf       ADCON0
+    movlf       0x99,ADCON0
     goto        _readADC
 
 ; Read the input analog signal, demuxer configured previously
 _readADC:
-    movlw       .26                ; Tadq >= 20us (Fclock = 16MHz)
-    movwf       conta_ad
-    decfsz      conta_ad,F        ; (3N+3)c   (inclui call)
-    goto       $ - 1            ; aguarda tempo de aquisi��o
 
-    ; Start the Analog to Digital conversion
+    ; Wait minimum acquisition time (20us)
+    movlw       .26
+    decfsz      W,F
+    goto        $ - 1
+
+    ; Start and wait done conversion
     bsf         ADCON0,GO_DONE
-
-    ; Wait until the conversion is finished
     btfsc       ADCON0,GO_DONE
     goto        $ - 1
 
-    ; Read value to W
+    ; Save measurements into FSR
+    memoryPage0
     movf        ADRESH,W
-    movwf       Binario10H
+    movwf       INDF
+    incf        FSR,F
+
     memoryPage1
     movf        ADRESL,W
     memoryPage0
-    movwf       Binario10L       ;Resultado em Binario10
+    movwf       INDF
+    incf        FSR,F
     return
 
 ; |------------------------------------------------------------------| ;
+
+#include "UART.asm"
 
 END

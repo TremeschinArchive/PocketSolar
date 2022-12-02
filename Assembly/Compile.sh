@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 export WINEDEBUG=-all
 cd "$(dirname "$0")"
-wine ./thirdparty/mpasm/MPASMWIN.exe /q /p16F877A "ViyLineCAP.asm" /l"ViyLine.lst" /e"ViyLine.err" /d__DEBUG=1
+wine ./thirdparty/mpasm/MPASMWIN.exe /q /p16F877A "ViyLineCAP.asm" /l"ViyLineCAP.lst" /e"ViyLineCAP.err" /d__DEBUG=1
 
 # Remove nobody-asked-for-files
 # rm ViyLine.err
@@ -9,4 +9,4 @@ wine ./thirdparty/mpasm/MPASMWIN.exe /q /p16F877A "ViyLineCAP.asm" /l"ViyLine.ls
 # rm ViyLine.O
 
 # No need to scream
-# mv ViyLine.HEX ViyLine.hex
+# mv ViyLineCAP.HEX ViyLineCAP.hex
