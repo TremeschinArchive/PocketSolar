@@ -3,7 +3,7 @@
 <div align="center">
   <img src="https://github.com/BrokenSource/ViyLine/raw/Master/Website/icon.png" onerror="this.src='../Website/icon.png'" width="256"/>
 
-    ViyLine
+    ViyLine - Vee Aye Line
 
   Solar panel IV curve tracker using a PIC16F877A Microcontroller, HC-06 Bluetooth module and a front end GUI in Rust.
 
@@ -44,19 +44,19 @@ Read our [Paper](https://github.com/BrokenSource/ViyLine/raw/Master/Paper/Paper.
 
 <br>
 
-3. **Native** Compile and run ViyLine Rust
+3. **(Native)** Compile and run ViyLine Rust
     - `cargo run --release`
 
 <br>
 
-4. **Web/WASM** Compile and run ViyLine on a browser
+3. **(Web/WASM)** Compile and run ViyLine on a browser
     - `cargo install trunk`
     - `trunk serve --release`
     - Web version does NOT have Bluetooth working.
 
 <br>
 
-5. *(optional)* Building the Assembly
+4. *(optional)* Building the Assembly
     - You'll need to download MPLAB and compile the `.asm` code with `MPASMWIN.exe` to generate the `.hex` sent to the microcontroller.
     - Copy `mpasm` folder (that has `MPASMWIN.exe`, `p*.inc`) from installation to `./Assembly/thirdparty/mpasm`.
     - Either run `Compile.sh` in Linux/MacOS or on Windows open a PowerShell and run `MPASMWIN.exe /q /p16F877A "ViyLineCAP.asm"`
@@ -88,7 +88,7 @@ ViyLine code falls under the `MIT` License. The logos, schematics are under CC-B
 
 # ● Citing
 
-A BibTeX entry for LaTeX users is:
+BibTeX entry for LaTeX:
 ```tex
 @electronic{viyline,
     title = {ViyLine: A Solar Panel IV Curve Tracker},
