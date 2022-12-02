@@ -4,13 +4,24 @@
     <img src="https://github.com/BrokenSource/ViyLine/raw/Master/Website/icon.png" onerror="this.src='../Website/icon.png'" width="256"/>
 
     ViyLine
+
+    Solar panel IV curve tracker using a PIC16F877A Microcontroller, HC-06 Bluetooth module and a front end GUI in Rust.
 </div>
 
-<h3>Solar panel IV curve tracker using a PIC16F877A Microcontroller, HC-06 Bluetooth module and a front end GUI in Rust.</h3>
-
-*This is a VERY DIY project, you must build the physical circuit, we provide you the schematic and list of components.*
+*This is a VERY DIY project, you will be building the physical circuit itself, we provide you the schematic and list of components.*
 
 <br>
+
+
+
+# ● The Project: Briefly explained
+- Every Solar Panel has a characteristic current-voltage curve it can output at either value being limited. The two magical points are the **open circuit voltage** and **short circuit voltage**.
+
+- The curve changes with variations in luminosity and temperature, and can be used as a diagnosis of efficiency or any broken panel indication.
+
+- The curve also gives the rated power output and the point of maximum efficiency, called the Maximum Power Point (MPP).
+
+Read our [Paper](https://github.com/BrokenSource/ViyLine/raw/Master/Paper/Paper.pdf) for more details!
 
 
 
@@ -62,3 +73,27 @@ The circuit
 - 1x ManyFaradsAsPossible™ Capacitor *that doesn't kill you*
 - 1x UART USB for writing the hexadecimal on the PIC
 - A computer with bluetooth and any recent OS
+
+
+
+# ● License
+All credits to Microchip© on their respective names of `PIC`, `MPASM`, included libraries.
+
+ViyLine code falls under the `MIT` License. The logos, schematics are under CC-BY-4.0.
+
+
+
+# ● Citing
+
+A BibTeX entry for LaTeX users is:
+```tex
+@electronic{viyline,
+    title = {ViyLine: A Solar Panel IV Curve Tracker},
+    author = {Tremeschin},
+    year = 2022,
+    month = Dec,
+    keywords = {Rust, PIC, Assembly, Solar Panel, IV Curve},
+    abstract = {},
+    url = {https://github.com/BrokenSource/ViyLine},
+}
+```
