@@ -11,7 +11,7 @@
 
 <br>
 
-<h5><b>NOTE:</b> This is a VERY DIY project, you will be building the physical circuit itself, we provide you the schematic and list of components.<h5>
+<sub><b>NOTE:</b> This is a VERY DIY project, you will be building the physical circuit itself, we provide you the schematic and list of components.</sub>
 
 <br>
 

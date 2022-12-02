@@ -18,7 +18,6 @@ Fosc	 equ .20
 baudrate equ .9600
 
 ; Capacitor states on PORTB
-capacitorDoNothingHex equ 0x00
 capacitorChargeHex    equ 0x01
 capacitorDischargeHex equ 0x02
 
@@ -28,7 +27,7 @@ goto        setup
 
 ; Interruption -> Do nothing
 org         0x04
-
+goto        main
 
 ; |------------------------------------------------------------------| ;
 ; Macros / Syntactic sugars
@@ -78,7 +77,6 @@ copy            macro fileA, fileB
     movwf       fileB
     endm
 
-
 ; |------------------------------------------------------------------| ;
 ; Setup
 
@@ -86,10 +84,10 @@ setup:
     memoryPage1
         ; RB0 and RB1 control the capacitor
         movlf       0x03,TRISB
+        clrf        TRISB
 
         ; AN0, AN1, AN3 as analog
         movlf       0x84,ADCON1
-        clrf        TRISB
 
     memoryPage0
         call        clearMeasurements
@@ -108,27 +106,28 @@ endc
 
 main:
     ; Read some data from UART loop
-    call        RxCarUART
-	btfss	    flag_rx,0
-	goto	    $ - .2
+    mainWaitRxLoop:
+        call        RxCarUART
+	    btfss	    flag_rx,0
+	    goto	    mainWaitRxLoop
 
     ; Store received data
     movwf       rxdata
 
     ; Code 0 -> Clear measurements
-    ifeq        rxdata,0x0
+    ifeq        rxdata,0x00
     call        clearMeasurements
 
     ; Code 1 -> Reset pointer to send data
-    ifeq        rxdata,0x1
+    ifeq        rxdata,0x01
     call        resetMeasurmentsPointer
 
     ; Code 2 -> Send next 8 bits from read values
-    ifeq        rxdata,0x2
+    ifeq        rxdata,0x02
     call        sendNextByte
 
     ; Code > 2 -> Make measurement with Delta T = $command
-    ifgreater   rxdata,0x2
+    ifgreater   rxdata,0x02
     call        measureFull
 
     goto        main
@@ -164,7 +163,7 @@ measureFull:
         call        singleMeasure
         ifneq       FSR,0x80
         goto        measureLoop
-    movlf       capacitorDoNothingHex,PORTB
+    movlf       capacitorDischargeHex,PORTB
     return
 
 ; - - - - - - - - - - - - - - - - - - - ;
@@ -177,8 +176,7 @@ chargeCapacitor:
 dischargeCapacitor:
     movlf       capacitorDischargeHex,PORTB
     call        delay500ms
-    movlf       capacitorDoNothingHex,PORTB
-
+    return
 
 ; - - - - - - - - - - - - - - - - - - - ;
 ; Measurement data manipulation
@@ -191,16 +189,17 @@ resetMeasurmentsPointer:
 ; Clear all measurements made
 clearMeasurements:
     call        resetMeasurmentsPointer
+    clearLoop:
         clrf        INDF
         incf        FSR,F
         ifneq       FSR,0x70
-        goto        $ - .3
+        goto        clearLoop
     call        resetMeasurmentsPointer
     return
 
 ; Send the next pack of 8 bits to the outside world
 sendNextByte:
-    movf        FSR,W
+    movf        INDF,W
 	call        TxCarUART
     incf        FSR,F
     return
