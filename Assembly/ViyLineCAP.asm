@@ -137,7 +137,7 @@ singleMeasure:
 
     ; Call measureDelay $rxdata times
     singleMeasureLoop:
-        call        measureDelay
+        call        delay1ms
         decf        measureDelays,F
         ifneq       measureDelays,0x0
         goto        singleMeasureLoop
@@ -158,13 +158,6 @@ measureFull:
     movlf       capacitorDoNothingHex,PORTB
     return
 
-; FIXME: Proper delay
-measureDelay:
-    movlw       0x0
-    decfsz      W,F
-    goto        $ - 1
-    return
-
 ; - - - - - - - - - - - - - - - - - - - ;
 ; Capacitor functions
 
@@ -174,13 +167,9 @@ chargeCapacitor:
 
 dischargeCapacitor:
     movlf       capacitorDischargeHex,PORTB
-    call        capacitorDischageDelay
+    call        delay500ms
     movlf       capacitorDoNothingHex,PORTB
 
-; TODO
-capacitorDischageDelay:
-    nop
-    return
 
 ; - - - - - - - - - - - - - - - - - - - ;
 ; Measurement data manipulation
@@ -244,6 +233,40 @@ _readADC:
     memoryPage0
     movwf       INDF
     incf        FSR,F
+    return
+
+; |------------------------------------------------------------------| ;
+; Delays
+
+cblock
+    delayCounter1
+    delayCounter2
+    delayCounter3
+endc
+
+; 1 ms delay function
+delay1ms:
+    movlf       0x7B,delayCounter1
+    movlf       0x07,delayCounter2
+    delay1msLoop:
+        decfsz      delayCounter1, 1
+        goto        delay1msLoop
+        decfsz      delayCounter2, 1
+        goto        delay1msLoop
+    return
+
+; 500 ms delay function
+delay500ms:
+    movlf       0xB5,delayCounter1
+    movlf       0xAF,delayCounter2
+    movlf       0x0D,delayCounter3
+    delay500msLoop:
+        decfsz      delayCounter1, 1
+        goto        delay500msLoop
+        decfsz      delayCounter2, 1
+        goto        delay500msLoop
+        decfsz      delayCounter3, 1
+        goto        delay500msLoop
     return
 
 ; |------------------------------------------------------------------| ;
