@@ -1,14 +1,17 @@
 👆【☰】Table of Contents
 
 <div align="center">
-    <img src="https://github.com/BrokenSource/ViyLine/raw/Master/Website/icon.png" onerror="this.src='../Website/icon.png'" width="256"/>
+  <img src="https://github.com/BrokenSource/ViyLine/raw/Master/Website/icon.png" onerror="this.src='../Website/icon.png'" width="256"/>
 
     ViyLine
 
-    Solar panel IV curve tracker using a PIC16F877A Microcontroller, HC-06 Bluetooth module and a front end GUI in Rust.
+  Solar panel IV curve tracker using a PIC16F877A Microcontroller, HC-06 Bluetooth module and a front end GUI in Rust.
+
 </div>
 
-*This is a VERY DIY project, you will be building the physical circuit itself, we provide you the schematic and list of components.*
+<br>
+
+<h5><b>NOTE:</b> This is a VERY DIY project, you will be building the physical circuit itself, we provide you the schematic and list of components.<h5>
 
 <br>
 
