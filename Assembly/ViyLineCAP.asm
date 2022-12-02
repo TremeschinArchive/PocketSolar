@@ -1,8 +1,17 @@
-; | (c) 2022 Tremeschin, MIT License | ViyLine Project | ;
+; |------------------------------------------------------------------| ;
+;        | (c) 2022 Tremeschin, MIT License | ViyLine Project |        ;
+; |------------------------------------------------------------------| ;
+
+ERRORLEVEL -205, -207, -302, -203
+
+; PIC16F877A Headers
 list p=16f877a
 #include <p16f877a.inc>
+
+; Config word
 __CONFIG _HS_OSC & _WDT_OFF & _PWRTE_ON & _BODEN_OFF & _LVP_OFF
-ERRORLEVEL -305, -302
+
+; |------------------------------------------------------------------| ;
 
 ; Constants
 Fosc	 equ .20
@@ -224,8 +233,7 @@ _readADC:
 
     ; Save measurements into FSR
     memoryPage0
-    movf        ADRESH,W
-    movwf       INDF
+    copy        ADRESH,INDF
     incf        FSR,F
 
     memoryPage1
@@ -236,7 +244,7 @@ _readADC:
     return
 
 ; |------------------------------------------------------------------| ;
-; Delays
+; Delays for 20 MHz
 
 cblock
     delayCounter1
