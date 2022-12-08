@@ -77,24 +77,40 @@ copy            macro fileA, fileB
     movwf       fileB
     endm
 
+; Transmit a literal
+txliteral       macro literal
+    movlw       literal
+    call        TxCarUART
+    endm
+
+; Notify Rust PIC is busy
+notifyBusy      macro
+    txliteral   0x00
+    endm
+
+; Notify Rust PIC is ready for command
+notifyFree      macro
+    txliteral   0xFF
+    endm
+
 ; |------------------------------------------------------------------| ;
 ; Setup
 
 setup:
     memoryPage1
         ; RB0 and RB1 control the capacitor
-        movlf       0x03,TRISB
         clrf        TRISB
 
         ; AN0, AN1, AN3 as analog
         movlf       0x84,ADCON1
 
+    ; Clear measurements and dischage capacitor default state
     memoryPage0
+	    call	    setupUART
         call        clearMeasurements
+        call        dischargeCapacitor
 
-	call	    setupUART
     goto        main
-
 
 ; |------------------------------------------------------------------| ;
 ; Main
@@ -105,6 +121,9 @@ cblock 0x20
 endc
 
 main:
+    ; Always the default state is discharging
+    movlf       capacitorDischargeHex,PORTB
+
     ; Read some data from UART loop
     mainWaitRxLoop:
         call        RxCarUART
@@ -114,16 +133,8 @@ main:
     ; Store received data
     movwf       rxdata
 
-    ; Code 0 -> Clear measurements
-    ifeq        rxdata,0x00
-    call        clearMeasurements
-
-    ; Code 1 -> Reset pointer to send data
-    ifeq        rxdata,0x01
-    call        resetMeasurmentsPointer
-
     ; Code 2 -> Send next 8 bits from read values
-    ifeq        rxdata,0x02
+    ifeq        rxdata,0x01
     call        sendNextByte
 
     ; Code > 2 -> Make measurement with Delta T = $command
@@ -142,6 +153,7 @@ endc
 ; Do a single measurement
 singleMeasure:
     copy        rxdata,measureDelays
+    call        pointCollectedNotification
 
     ; Call measureDelay $rxdata times
     singleMeasureLoop:
@@ -152,18 +164,31 @@ singleMeasure:
 
     ; Measure voltage and current
     call        readVoltage
-    Call        readCurrent
+    call        readCurrent
     return
 
-; Measure multiple times
+; Make a full measurement (Measure multiple times)
 measureFull:
+    notifyBusy
     call        dischargeCapacitor
+    call        clearMeasurements
     call        chargeCapacitor
     measureLoop:
         call        singleMeasure
         ifneq       FSR,0x80
         goto        measureLoop
-    movlf       capacitorDischargeHex,PORTB
+    call        resetMeasurmentsPointer
+    notifyFree
+    return
+
+; Send some external signal saying we collected a point
+pointCollectedNotification:
+    btfsc       PORTB,2
+    goto        $ + 3
+        bsf         PORTB,2
+        return
+    btfsc       PORTB,2
+    bcf         PORTB,2
     return
 
 ; - - - - - - - - - - - - - - - - - - - ;
@@ -181,20 +206,20 @@ dischargeCapacitor:
 ; - - - - - - - - - - - - - - - - - - - ;
 ; Measurement data manipulation
 
-; Reset FSR to the starting value of measurements
-resetMeasurmentsPointer:
-    movlf       0x30,FSR
-    return
-
 ; Clear all measurements made
 clearMeasurements:
     call        resetMeasurmentsPointer
     clearLoop:
         clrf        INDF
         incf        FSR,F
-        ifneq       FSR,0x70
+        ifneq       FSR,0x80
         goto        clearLoop
     call        resetMeasurmentsPointer
+    return
+
+; Reset FSR to the starting value of measurements
+resetMeasurmentsPointer:
+    movlf       0x30,FSR
     return
 
 ; Send the next pack of 8 bits to the outside world
@@ -206,6 +231,10 @@ sendNextByte:
 
 ; - - - - - - - - - - - - - - - - - - - ;
 ; ADC functions
+
+cblock
+    minimumAquisitionTime
+endc
 
 ; Voltage is read on RA1 == AN1 port, configure muxer and read
 readVoltage:
@@ -221,8 +250,8 @@ readCurrent:
 _readADC:
 
     ; Wait minimum acquisition time (20us)
-    movlw       .26
-    decfsz      W,F
+    movlf       0x1A,minimumAquisitionTime
+    decfsz      minimumAquisitionTime,F
     goto        $ - 1
 
     ; Start and wait done conversion
@@ -231,15 +260,17 @@ _readADC:
     goto        $ - 1
 
     ; Save measurements into FSR
-    memoryPage0
-    copy        ADRESH,INDF
-    incf        FSR,F
+    saveMeasurements:
+        memoryPage0
+        copy        ADRESH,INDF
+        incf        FSR,F
 
-    memoryPage1
-    movf        ADRESL,W
-    memoryPage0
-    movwf       INDF
-    incf        FSR,F
+        memoryPage1
+        movf        ADRESL,W
+        memoryPage0
+        movwf       INDF
+        incf        FSR,F
+
     return
 
 ; |------------------------------------------------------------------| ;
@@ -256,9 +287,9 @@ delay1ms:
     movlf       0x7B,delayCounter1
     movlf       0x07,delayCounter2
     delay1msLoop:
-        decfsz      delayCounter1, 1
+        decfsz      delayCounter1,F
         goto        delay1msLoop
-        decfsz      delayCounter2, 1
+        decfsz      delayCounter2,F
         goto        delay1msLoop
     return
 
@@ -268,11 +299,11 @@ delay500ms:
     movlf       0xAF,delayCounter2
     movlf       0x0D,delayCounter3
     delay500msLoop:
-        decfsz      delayCounter1, 1
+        decfsz      delayCounter1,F
         goto        delay500msLoop
-        decfsz      delayCounter2, 1
+        decfsz      delayCounter2,F
         goto        delay500msLoop
-        decfsz      delayCounter3, 1
+        decfsz      delayCounter3,F
         goto        delay500msLoop
     return
 

@@ -1,6 +1,7 @@
 // | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
 // #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(non_snake_case)]
+#![allow(unused_must_use)]
 
 use egui::plot::Line;
 use egui::plot::Plot;
@@ -8,9 +9,6 @@ use egui::plot::PlotPoints;
 use egui::plot::Points;
 use egui::Color32;
 use libm::*;
-use rand::Rng;
-use rand_pcg::Pcg32;
-use rand::SeedableRng;
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::api::WriteType;
@@ -117,14 +115,6 @@ pub struct ViyLineApp {
     exportNOfPoints: i64,
     outputCSV: String,
 
-    // Temporary variables
-    A: f64,
-    B: f64,
-    N: i64,
-    k: f64,
-    errorPCT: f64,
-    errorRange: f64,
-
     // Bluetooth
     hc06: Option<btleplug::platform::Peripheral>,
     readCharacteristic:  Option<btleplug::api::Characteristic>,
@@ -137,16 +127,7 @@ impl ViyLineApp {
     pub async fn new() -> ViyLineApp {
         return ViyLineApp {
             plotPoints: true,
-
             exportNOfPoints: 20,
-
-            A: 10.0,
-            B: 0.01,
-            k: 0.30,
-            N: 79,
-
-            errorPCT: 20.0,
-            errorRange: 0.03,
 
             ..ViyLineApp::default()
         };
@@ -154,13 +135,10 @@ impl ViyLineApp {
 
     fn bluetoothWrite(&self, data: &Vec<u8>) {
         block_on(self.hc06.as_ref().unwrap().write(&self.writeCharacteristic.as_ref().unwrap(), data, WriteType::WithoutResponse)).unwrap();
-        // block_on(async_std::task::sleep(std::time::Duration::from_millis(50)));
     }
 
-    fn bluetoothRead(&self) -> Vec<u8> {
-        let data = block_on(self.hc06.as_ref().unwrap().read(&self.readCharacteristic.as_ref().unwrap())).unwrap();
-        // block_on(async_std::task::sleep(std::time::Duration::from_millis(50)));
-        return data;
+    fn bluetoothRead(&self) -> u8 {
+        return block_on(self.hc06.as_ref().unwrap().read(&self.readCharacteristic.as_ref().unwrap())).unwrap()[0];
     }
 
     async fn findBluetooth(&mut self) {
@@ -173,45 +151,55 @@ impl ViyLineApp {
 
         // For all found Bluetooth adapters
         for adapter in adapter_list.iter() {
-            self.bluetoothDevices.push(
-                format!("Adapter: [{}]", adapter.adapter_info().await.unwrap())
-            );
+            let adapterName = format!("{}", adapter.adapter_info().await.unwrap());
+            self.bluetoothDevices.push(format!("Adapter: [{}]", adapterName));
+
+            println!("Adapter: {}", adapterName);
 
             // Scan for peripherals
             adapter.start_scan(ScanFilter::default()).await.unwrap();
-            async_std::task::sleep(std::time::Duration::from_millis(2000)).await;
 
-            // FIXME: Wasm unreachable
-            let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
+            loop {
+                // FIXME: Wasm unreachable
+                let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
+                println!(":: List of Peripherals:");
+                async_std::task::sleep(std::time::Duration::from_millis(500)).await;
 
-            for peripheral in peripherals.iter() {
-                let properties = peripheral.properties().await.expect("Can't get properties");
-                let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
+                for peripheral in peripherals.iter() {
+                    let properties = peripheral.properties().await.expect("Can't get properties").unwrap();
+                    // let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
 
-                // Only connect to HC-06
-                if local_name != "HC-06" {continue;}
+                    let local_name = properties.local_name.unwrap_or(String::from("Unknown Name"));
+                    let mac = properties.address;
 
-                // Connect if not paired
-                if !peripheral.is_connected().await.unwrap() {
-                    if let Err(err) = peripheral.connect().await {
-                        self.bluetoothDevices.push(format!(" - ERROR: {}", err));
-                        continue;
+                    println!("- Peripheral [MAC: {mac}] [{local_name}]");
+
+                    // Only connect to HC-06
+                    if local_name != "HC-06" {continue;}
+                    println!("Match!");
+
+                    // Connect if not paired
+                    if !peripheral.is_connected().await.unwrap() {
+                        if let Err(err) = peripheral.connect().await {
+                            self.bluetoothDevices.push(format!(" - ERROR: {}", err));
+                            continue;
+                        }
                     }
+
+                    // Show info on name
+                    self.bluetoothDevices.push(format!(" - {}", local_name));
+
+                    // Discover services and characteristics
+                    peripheral.discover_services().await.unwrap();
+                    let characteristics = Some(peripheral.characteristics().clone());
+                    self.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
+                    self.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE1)).unwrap().clone());
+
+                    // Assign bluetooth module variables
+                    self.hc06 = Some(peripheral.clone());
+                    return;
                 }
-
-                // Show info on name
-                self.bluetoothDevices.push(format!(" - {}", local_name));
-
-                // Discover services and characteristics
-                peripheral.discover_services().await.unwrap();
-                let characteristics = Some(peripheral.characteristics().clone());
-                self.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
-                self.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE1)).unwrap().clone());
-
-                // Assign bluetooth module variables
-                self.hc06 = Some(peripheral.clone());
             }
-
         }
     }
 }
@@ -242,17 +230,76 @@ impl eframe::App for ViyLineApp {
                         block_on(self.findBluetooth());
                     }
                 } else {
-                    // Buttons / Actions
-                    if ui.button("Measure").clicked() {
-                        for i in 0..10  {
-                            println!("");
 
-                            // Write data
-                            self.bluetoothWrite(&vec![(i) as u8, (i+1) as u8, (i+2) as u8, (i+3) as u8]);
+                }
 
-                            // Read data
-                            let data = self.bluetoothRead();
-                            println!("Buffer: {:?}", data);
+                // Buttons / Actions
+                if ui.button("Measure").clicked() {
+
+                    // Open the serial port
+                    let mut port = serialport::new("COM3", 9600)
+                        .timeout(std::time::Duration::from_millis(4))
+                        .open().expect("Failed to open port");
+
+                    // Where data is read from the serial port
+                    let mut serialBuffer: Vec<u8> = vec![0; 1];
+
+                    // The measurement ends when we receive an 0xFF
+                    fn waitPic(app: &mut ViyLineApp, port: &mut Box<dyn serialport::SerialPort>, serialBuffer: &mut Vec<u8>) {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                        loop {
+                            if app.hc06.is_some() {
+                                if app.bluetoothRead() == 0xFF {break;}
+                            } else {
+                                (*port).read((*serialBuffer).as_mut_slice());
+                                if serialBuffer[0] == 0xFF {break;}
+                            }
+                        }
+                    }
+
+                    // Read an unsigned int 8 from serial port
+                    fn readByte(app: &mut ViyLineApp, port: &mut Box<dyn serialport::SerialPort>, serialBuffer: &mut Vec<u8>) -> u8 {
+                        if app.hc06.is_some() {
+                            app.bluetoothWrite(&vec![0x01]);
+                            return app.bluetoothRead();
+                        } else {
+                            (*port).write(&[0x01 as u8]);
+                            (*port).read(serialBuffer.as_mut_slice());
+                            return serialBuffer[0];
+                        }
+                    }
+
+                    // Times to measure
+                    let times = match self.hc06 {
+                        None => vec![5, 10, 15, 20, 30, 50],
+                        Some(_) => vec![40],
+                    };
+
+                    for t in times {
+                        println!(":: Measure with DeltaT = {t}ms");
+
+                        // Clear and call new measuremen
+                        if self.hc06.is_some() {
+                            self.bluetoothWrite(&vec![t]);
+                        } else {
+                            port.write(&[t    as u8]);
+                        }
+
+                        waitPic(self, &mut port, &mut serialBuffer);
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+
+                        // Read measurements
+                        for _ in 1..=20 {
+                            let upperV = readByte(self, &mut port, &mut serialBuffer) as f64;
+                            let lowerV = readByte(self, &mut port, &mut serialBuffer) as f64;
+                            let upperI = readByte(self, &mut port, &mut serialBuffer) as f64;
+                            let lowerI = readByte(self, &mut port, &mut serialBuffer) as f64;
+
+                            let V = ((upperV*256.0 + lowerV)/1023.0) * 5.0;
+                            let I = ((upperI*256.0 + lowerI)/1023.0) * 5.0;
+
+                            println!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
+                            self.ivCurve.addPoint(V, I);
                         }
                     }
                 }
@@ -289,12 +336,8 @@ impl eframe::App for ViyLineApp {
                                 }
                             }
 
-                            // // Add text box
-                            ui.add(
-                                egui::TextEdit::multiline(&mut self.outputCSV)
-                                    .font(egui::TextStyle::Monospace)
-
-                            );
+                            // Add text box
+                            ui.add(egui::TextEdit::multiline(&mut self.outputCSV).font(egui::TextStyle::Monospace));
                         });
                     }
                 }
@@ -310,66 +353,31 @@ impl eframe::App for ViyLineApp {
             });
         });
 
-
         // Technical info
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             ui.label(format!("Function:  i(v) = {:.2} - ({:.3e})exp({:.4}v)", curve.A, curve.B, curve.k));
             ui.style_mut().spacing.slider_width = 260.0;
-
-            // Temporary unknown variables sliders
-            if true {
-                ui.add(egui::Slider::new(&mut self.A, 0.0..=10.0).text("Unknown A"));
-                ui.add(egui::Slider::new(&mut self.B, 0.0..= 2.0).text("Unknown B"));
-                ui.add(egui::Slider::new(&mut self.k, 0.0..= 1.0).text("Unknown k"));
-                ui.separator();
-                ui.add(egui::Slider::new(&mut self.N, 0..=500).text("Points"));
-                ui.separator();
-                ui.add(egui::Slider::new(&mut self.errorPCT, 0.0..=100.0).text("Error %"));
-                ui.add(egui::Slider::new(&mut self.errorRange, 0.0..=0.99).text("Error ABS"));
-            }
         });
 
 
         // Main plot
         egui::CentralPanel::default().show(ctx, |ui| {
 
-            // Temporary random points
-            if true {
-                let mut rng = Pcg32::seed_from_u64(42);
-                self.ivCurve.clear();
-
-                for _ in 0..self.N {
-
-                    // Random X, precise Y
-                    let x = rng.gen_range(0.0..30.0);
-                    let mut y = self.A - self.B*exp(self.k*x);
-
-                    // Insert dirty Y sometimes
-                    if rng.gen_range(0.0..100.0) > (100.0 - self.errorPCT) {
-                        if self.errorRange != 0.0 {
-                            y *= rng.gen_range((1.0 - self.errorRange)..1.0);
-                        }
-                    }
-
-                    self.ivCurve.addPoint(x, y);
-                }
-            }
-
             // Main plot
             Plot::new("lines_demo").show(ui, |plot_ui| {
 
                 // Plot continuous IV curve
-                plot_ui.line({
-                    Line::new(PlotPoints::from_explicit_callback(
-                        move |x| {
-                            if x < 0.0 {return 0.0;}
-                            let I = curve.interpolatedValueAt(x);
-                            if I < 0.0 {return 0.0;}
-                            return I;
-                        }, .., 512,
-                    ))
-                    .width(5.0)
-                });
+                // plot_ui.line({
+                //     Line::new(PlotPoints::from_explicit_callback(
+                //         move |x| {
+                //             if x < 0.0 {return 0.0;}
+                //             let I = curve.interpolatedValueAt(x);
+                //             if I < 0.0 {return 0.0;}
+                //             return I;
+                //         }, .., 512,
+                //     ))
+                //     .width(5.0)
+                // });
 
                 // Plot points on graph
                 if self.plotPoints {
