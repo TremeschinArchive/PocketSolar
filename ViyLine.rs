@@ -2,6 +2,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(non_snake_case)]
 #![allow(unused_must_use)]
+use Protostar::*;
 
 use egui::plot::Line;
 use egui::plot::Plot;
@@ -15,100 +16,35 @@ use btleplug::api::WriteType;
 use btleplug::platform::Manager;
 use btleplug::api::bleuuid::uuid_from_u16;
 
-// ----------------------------------------------------------------------------|
-
-#[derive(Default, Clone)]
-struct Point {
-    x: f64,
-    y: f64,
-}
-
-#[derive(Default, Clone)]
-struct Curve {
-    points: Vec<Point>,
-
-    // Curve parameters
-    k: f64,
-    A: f64,
-    B: f64
-}
-
-impl Curve {
-    // Returns the coefficients
-    fn calculateCoefficients(&mut self) {
-
-        // If we even have some points
-        if self.points.len() > 0 {
-
-            // Initial guess of B value
-            if self.B == 0.0 {self.B = 0.5;}
-
-            // This is one of the hardest part, find the perfect initial value I(0)
-            let maxY = self.minMaxY().unwrap().1;
-
-            // Repeat until we get a nice estimate of B
-            for _ in 1..50 {
-
-                // Update A coefficient based on last iteration values
-                self.A = maxY + self.B;
-
-                // X, Y points for linear regression
-                let x = Vec::from_iter(self.points.iter().map( |point|  point.x                ));
-                let y = Vec::from_iter(self.points.iter().map( |point| (self.A*(1.0) - point.y).ln() ));
-
-                // Linear regression
-                let sumX:   f64 = x.iter().sum();
-                let sumY:   f64 = y.iter().sum();
-                let sumXY:  f64 = x.iter().zip(y).map(|(a, b)| a*b).sum();
-                let sumXSq: f64 = x.iter().map(|a| a*a).sum();
-                let n = self.points.len() as f64;
-
-                // y = ax + b
-                let a = (n*sumXY - sumX*sumY)/(n*sumXSq - sumX.powf(2.0));
-                let b = (sumY - a*sumX)/n;
-
-                // On the linearized iv curve, for y = A - Be^kx, we have ln(y) = -kx + ln(B)
-                self.k = a;
-                self.B = exp(b);
-            }
-        }
-    }
-
-    // Calculate a generic point X
-    fn interpolatedValueAt(&self, x: f64) -> f64 {
-        return self.A - self.B*exp(self.k*x);
-    }
-
-    // Minimum and maximum value of the curve
-    fn minMaxY(&self) -> Option<(f64, f64)> {
-        if self.points.len() == 0 {return None;}
-        let mut yValues = Vec::from_iter(self.points.iter().map(|point| point.y));
-        yValues.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let minY = yValues.first().unwrap();
-        let maxY = yValues.last().unwrap();
-        return Some((*minY, *maxY));
-    }
-
-    // Empty the curve
-    fn clear(&mut self) {
-        self.points = Vec::new();
-    }
-
-    fn addPoint(&mut self, x: f64, y: f64) {
-        self.points.push(Point { x: x, y: y });
-    }
-}
+use futures::executor::block_on;
 
 // ----------------------------------------------------------------------------|
 
+const BAUDRATE: u32 = 9600;
+
+#[path = "ViyLine/Curve.rs"]
+mod Curve;
+
+#[path = "ViyLine/Bluetooth.rs"]
+mod Bluetooth;
+
+#[path = "ViyLine/Serial.rs"]
+mod Serial;
+
+#[path = "ViyLine/GUI.rs"]
+mod GUI;
+
+// ----------------------------------------------------------------------------|
+
+#[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Default)]
 pub struct ViyLineApp {
-    ivCurve: Curve,
+    #[serde(skip)]
+    ivCurve: Curve::Curve,
 
-    time: f64,
-
-    // Plot
+    // Plot options
     plotPoints: bool,
+    plotCurve: bool,
 
     // Export Window
     showExportWindow: bool,
@@ -116,302 +52,77 @@ pub struct ViyLineApp {
     outputCSV: String,
 
     // Bluetooth
+    #[serde(skip)]
     hc06: Option<btleplug::platform::Peripheral>,
+    #[serde(skip)]
     readCharacteristic:  Option<btleplug::api::Characteristic>,
+    #[serde(skip)]
     writeCharacteristic: Option<btleplug::api::Characteristic>,
-    bluetoothDevices: Vec<String>,
+
+    // Serial
+    #[serde(skip)]
+    serialPort: Option<Box<dyn serialport::SerialPort>>,
+    portName: String,
 }
 
-
 impl ViyLineApp {
-    pub async fn new() -> ViyLineApp {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> ViyLineApp {
+
+        // Restore previous settings if any
+        if let Some(storage) = cc.storage {
+            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        }
+
         return ViyLineApp {
             plotPoints: true,
+            plotCurve: true,
             exportNOfPoints: 20,
 
             ..ViyLineApp::default()
         };
     }
+}
 
-    fn bluetoothWrite(&self, data: &Vec<u8>) {
-        block_on(self.hc06.as_ref().unwrap().write(&self.writeCharacteristic.as_ref().unwrap(), data, WriteType::WithoutResponse)).unwrap();
-    }
+// ----------------------------------------------------------------------------|
 
-    fn bluetoothRead(&self) -> u8 {
-        return block_on(self.hc06.as_ref().unwrap().read(&self.readCharacteristic.as_ref().unwrap())).unwrap()[0];
-    }
+// Serial + Bluetooth. We can probably do better than this, returning Result
+impl ViyLineApp {
 
-    async fn findBluetooth(&mut self) {
-
-        let manager = Manager::new().await.unwrap();
-        let adapter_list = manager.adapters().await.unwrap();
-
-        // Add number adapters found
-        self.bluetoothDevices.push(format!("Number of Adapters found: [{}]", adapter_list.len()));
-
-        // For all found Bluetooth adapters
-        for adapter in adapter_list.iter() {
-            let adapterName = format!("{}", adapter.adapter_info().await.unwrap());
-            self.bluetoothDevices.push(format!("Adapter: [{}]", adapterName));
-
-            println!("Adapter: {}", adapterName);
-
-            // Scan for peripherals
-            adapter.start_scan(ScanFilter::default()).await.unwrap();
-
-            loop {
-                // FIXME: Wasm unreachable
-                let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
-                println!(":: List of Peripherals:");
-                async_std::task::sleep(std::time::Duration::from_millis(500)).await;
-
-                for peripheral in peripherals.iter() {
-                    let properties = peripheral.properties().await.expect("Can't get properties").unwrap();
-                    // let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
-
-                    let local_name = properties.local_name.unwrap_or(String::from("Unknown Name"));
-                    let mac = properties.address;
-
-                    println!("- Peripheral [MAC: {mac}] [{local_name}]");
-
-                    // Only connect to HC-06
-                    if local_name != "HC-06" {continue;}
-                    println!("Match!");
-
-                    // Connect if not paired
-                    if !peripheral.is_connected().await.unwrap() {
-                        if let Err(err) = peripheral.connect().await {
-                            self.bluetoothDevices.push(format!(" - ERROR: {}", err));
-                            continue;
-                        }
-                    }
-
-                    // Show info on name
-                    self.bluetoothDevices.push(format!(" - {}", local_name));
-
-                    // Discover services and characteristics
-                    peripheral.discover_services().await.unwrap();
-                    let characteristics = Some(peripheral.characteristics().clone());
-                    self.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
-                    self.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE1)).unwrap().clone());
-
-                    // Assign bluetooth module variables
-                    self.hc06 = Some(peripheral.clone());
-                    return;
-                }
-            }
+    // Abstraction: Read 8 bits from the measure hardware
+    fn picRead(&mut self) -> u8 {
+        if self.serialPort.is_some() {
+            self.openSerialPort(&self.portName.clone());
+            return self.serialPortRead();
         }
+        if self.hc06.is_some() {
+            return self.bluetoothRead();
+        };
+        return 0;
+    }
+
+    // Abstraction: Write 8 bits from the measure hardware
+    fn picWrite(&mut self, data: u8) {
+        if self.serialPort.is_some() {
+            self.openSerialPort(&self.portName.clone());
+            return self.serialPortWrite(data);
+        }
+        if self.hc06.is_some() {
+            return self.bluetoothWrite(data);
+        };
     }
 }
 
-impl eframe::App for ViyLineApp {
-
-    // Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.time += 1.0/60.0;
-
-        // Calculate IV curve
-        let mut curve = self.ivCurve.clone();
-        curve.calculateCoefficients();
-
-        // Top bar
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-
-            ui.horizontal(|ui| {
-                // Title
-                ui.heading("ViyLine");
-                ui.separator();
-
-                // Dark mode / Light mode switch
-                egui::global_dark_light_mode_switch(ui);
-
-                if self.hc06.is_none() {
-                    if ui.button("Connect").clicked() {
-                        block_on(self.findBluetooth());
-                    }
-                } else {
-
-                }
-
-                // Buttons / Actions
-                if ui.button("Measure").clicked() {
-
-                    // Open the serial port
-                    let mut port = serialport::new("COM3", 9600)
-                        .timeout(std::time::Duration::from_millis(4))
-                        .open().expect("Failed to open port");
-
-                    // Where data is read from the serial port
-                    let mut serialBuffer: Vec<u8> = vec![0; 1];
-
-                    // The measurement ends when we receive an 0xFF
-                    fn waitPic(app: &mut ViyLineApp, port: &mut Box<dyn serialport::SerialPort>, serialBuffer: &mut Vec<u8>) {
-                        std::thread::sleep(std::time::Duration::from_millis(10));
-                        loop {
-                            if app.hc06.is_some() {
-                                if app.bluetoothRead() == 0xFF {break;}
-                            } else {
-                                (*port).read((*serialBuffer).as_mut_slice());
-                                if serialBuffer[0] == 0xFF {break;}
-                            }
-                        }
-                    }
-
-                    // Read an unsigned int 8 from serial port
-                    fn readByte(app: &mut ViyLineApp, port: &mut Box<dyn serialport::SerialPort>, serialBuffer: &mut Vec<u8>) -> u8 {
-                        if app.hc06.is_some() {
-                            app.bluetoothWrite(&vec![0x01]);
-                            return app.bluetoothRead();
-                        } else {
-                            (*port).write(&[0x01 as u8]);
-                            (*port).read(serialBuffer.as_mut_slice());
-                            return serialBuffer[0];
-                        }
-                    }
-
-                    // Times to measure
-                    let times = match self.hc06 {
-                        None => vec![5, 10, 15, 20, 30, 50],
-                        Some(_) => vec![40],
-                    };
-
-                    for t in times {
-                        println!(":: Measure with DeltaT = {t}ms");
-
-                        // Clear and call new measuremen
-                        if self.hc06.is_some() {
-                            self.bluetoothWrite(&vec![t]);
-                        } else {
-                            port.write(&[t    as u8]);
-                        }
-
-                        waitPic(self, &mut port, &mut serialBuffer);
-                        std::thread::sleep(std::time::Duration::from_millis(10));
-
-                        // Read measurements
-                        for _ in 1..=20 {
-                            let upperV = readByte(self, &mut port, &mut serialBuffer) as f64;
-                            let lowerV = readByte(self, &mut port, &mut serialBuffer) as f64;
-                            let upperI = readByte(self, &mut port, &mut serialBuffer) as f64;
-                            let lowerI = readByte(self, &mut port, &mut serialBuffer) as f64;
-
-                            let V = ((upperV*256.0 + lowerV)/1023.0) * 5.0;
-                            let I = ((upperI*256.0 + lowerI)/1023.0) * 5.0;
-
-                            println!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
-                            self.ivCurve.addPoint(V, I);
-                        }
-                    }
-                }
-
-                if curve.points.len() > 0 {
-                    if ui.button("Clear").clicked() {
-                        self.ivCurve.clear();
-                    }
-
-                    if ui.button("Export").clicked() {
-                        self.showExportWindow = !self.showExportWindow;
-                    }
-
-                    if self.showExportWindow {
-                        egui::Window::new("Export data window").show(ctx, |ui| {
-                            ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
-
-                            // // (re)Build the output CSV
-                            if ui.button("Export CSV").clicked() {
-                                self.outputCSV = String::from("index,     V,      I\n");
-
-                                // V open circuit
-                                // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                                let Voc = (curve.A/curve.B).ln() / curve.k;
-                                let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
-
-                                // For every dv
-                                for i in 0..self.exportNOfPoints {
-                                    // Calculate next IV point
-                                    let V = dV * (i as f64);
-                                    let I = curve.interpolatedValueAt(V);
-                                    self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
-                                    if I < 0.0 {break;}
-                                }
-                            }
-
-                            // Add text box
-                            ui.add(egui::TextEdit::multiline(&mut self.outputCSV).font(egui::TextStyle::Monospace));
-                        });
-                    }
-                }
-            });
-
-            // Repository, version
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(format!("[v{}]", env!("CARGO_PKG_VERSION")));
-                    ui.hyperlink_to("GitHub", "https://github.com/BrokenSource/ViyLine");
-                    // egui::warn_if_debug_build(ui);
-                });
-            });
-        });
-
-        // Technical info
-        egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
-            ui.label(format!("Function:  i(v) = {:.2} - ({:.3e})exp({:.4}v)", curve.A, curve.B, curve.k));
-            ui.style_mut().spacing.slider_width = 260.0;
-        });
-
-
-        // Main plot
-        egui::CentralPanel::default().show(ctx, |ui| {
-
-            // Main plot
-            Plot::new("lines_demo").show(ui, |plot_ui| {
-
-                // Plot continuous IV curve
-                // plot_ui.line({
-                //     Line::new(PlotPoints::from_explicit_callback(
-                //         move |x| {
-                //             if x < 0.0 {return 0.0;}
-                //             let I = curve.interpolatedValueAt(x);
-                //             if I < 0.0 {return 0.0;}
-                //             return I;
-                //         }, .., 512,
-                //     ))
-                //     .width(5.0)
-                // });
-
-                // Plot points on graph
-                if self.plotPoints {
-                    for point in &self.ivCurve.points {
-                        if point.y < 0.0 { continue; }
-                        plot_ui.points(
-                            Points::new([point.x, point.y])
-                                .radius(2.0)
-                                .color(Color32::from_rgb(0, 255, 0)),
-                        );
-                    }
-                }
-            });
-        });
-
-        egui::Window::new("Bluetooth").show(ctx, |ui| {
-            for name in &self.bluetoothDevices {
-                ui.label(name);
-            }
-        });
-
-    }
-}
-
-use futures::executor::block_on;
-
+// ----------------------------------------------------------------------------|
 
 async fn trueMain() {
-    let app = Box::new(ViyLineApp::new().await);
+    Protostar::setupLog();
 
     // Compile NATIVELY
     #[cfg(not(target_arch = "wasm32"))]
     eframe::run_native("ViyLine", eframe::NativeOptions::default(), Box::new(|cc| {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark()); return app;
+        let app = Box::new(ViyLineApp::new(cc));
+        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        return app;
     }));
 
     // Compile WASM
@@ -424,7 +135,9 @@ async fn trueMain() {
         tracing_wasm::set_as_global_default();
 
         eframe::start_web("ViyLine", eframe::WebOptions::default(), Box::new(|cc| {
-            cc.egui_ctx.set_visuals(egui::Visuals::dark()); return app;
+            let app = Box::new(ViyLineApp::new(cc));
+            cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            return app;
         })).expect("failed to start eframe");
     }
 }
