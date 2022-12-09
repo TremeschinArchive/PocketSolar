@@ -30,33 +30,18 @@ Read our [Paper](https://github.com/BrokenSource/ViyLine/raw/Master/Paper/Paper.
 
 # ● Running from Source Code
 
-1. Download [The Source Code](https://github.com/BrokenSource/ViyLine/archive/refs/heads/Master.zip) of ViyLine or clone this repo with:
-    - `git clone https://github.com/BrokenSource/ViyLine`.
+1. Follow the **Running from Source Code** bootstrap from [Protostar](https://github.com/BrokenSource/Protostar) Monorepo.
 
 <br>
 
-2. Install Rust
-    - **Linux, MacOS**:
-        - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-        - `rustup default stable`
-
-    - **Windows**: [Go to this link](https://www.rust-lang.org/learn/get-started)
-
-<br>
-
-3. **(Native)** Compile and run ViyLine Rust
-    - `cargo run --release`
-
-<br>
-
-3. **(Web/WASM)** Compile and run ViyLine on a browser
+2. (optional) **(Web/WASM)** Compile and run ViyLine on a browser
     - `cargo install trunk`
     - `trunk serve --release`
-    - Web version does NOT have Bluetooth working.
+    - Web version does NOT have Bluetooth working and potentially no Serial, so it's useless.
 
 <br>
 
-4. *(optional)* Building the Assembly
+3. Building the Assembly
     - You'll need to download MPLAB and compile the `.asm` code with `MPASMWIN.exe` to generate the `.hex` sent to the microcontroller.
     - Copy `mpasm` folder (that has `MPASMWIN.exe`, `p*.inc`) from installation to `./Assembly/thirdparty/mpasm`.
     - Either run `Compile.sh` in Linux/MacOS or on Windows open a PowerShell and run `MPASMWIN.exe /q /p16F877A "ViyLineCAP.asm"`
