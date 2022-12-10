@@ -16,7 +16,7 @@ impl eframe::App for ViyLineApp {
         curve.calculateCoefficients();
 
         // Top bar
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+        egui::TopBottomPanel::top("topPanel").show(ctx, |ui| {
             curve.addPoint(0.0, 0.0);
 
             ui.horizontal(|ui| {
@@ -24,14 +24,16 @@ impl eframe::App for ViyLineApp {
                 ui.heading("ViyLine");
                 ui.separator();
 
-                // Dark mode / Light mode switch
-                egui::global_dark_light_mode_switch(ui);
+                // Configurations window
+                if ui.button("🔧").clicked() {
+                    self.showConfigurationWindow = !self.showConfigurationWindow;
+                }
 
                 // Buttons / Actions
                 if ui.button("Measure").clicked() {
 
                     // Read an unsigned int 8 from serial port
-                    fn readByte(app: &mut ViyLineApp) -> u8 {
+                    fn readByte(app: &mut ViyLineApp) -> Result<u8, ()> {
                         app.picWrite(0x01);
                         return app.picRead();
                     }
@@ -42,35 +44,38 @@ impl eframe::App for ViyLineApp {
                         Some(_) => vec![40],
                     };
 
-                    for t in times {
+                    'timesLoop: for t in times {
                         info!(":: Measure with DeltaT = {t}ms");
 
                         // Clear and call new measuremen
                         self.picWrite(t);
 
-                        // Syncronize PIC with Rust
-                        while self.picRead() != 0xFF {
+                        // Syncronize PIC with Rust (wait for 0xFF else break on error)
+                        loop {
                             std::thread::sleep(std::time::Duration::from_millis(1));
+                            let value = self.picRead();
+                            match value {
+                                Ok(value) => {if value == 0xFF {break;}},
+                                Err(()) => {break 'timesLoop;},
+                            };
                         }
-
-                        std::thread::sleep(std::time::Duration::from_millis(10));
 
                         // Read measurements
                         for _ in 1..=20 {
-                            let upperV = readByte(self) as f64;
-                            let lowerV = readByte(self) as f64;
-                            let upperI = readByte(self) as f64;
-                            let lowerI = readByte(self) as f64;
+                            let upperV = readByte(self).unwrap() as f64;
+                            let lowerV = readByte(self).unwrap() as f64;
+                            let upperI = readByte(self).unwrap() as f64;
+                            let lowerI = readByte(self).unwrap() as f64;
 
-                            let V = ((upperV*256.0 + lowerV)/1023.0) * 5.0 * self.Ki;
-                            let I = ((upperI*256.0 + lowerI)/1023.0) * 5.0 * self.Kv;
+                            // (0-100%) * Scaler (out of 5V)
+                            let V = ((upperV*256.0 + lowerV)/1023.0) * self.Ki;
+                            let I = ((upperI*256.0 + lowerI)/1023.0) * self.Kv;
 
                             info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
                             self.ivCurve.addPoint(V, I);
                         }
                     }
                 }
-
 
                 // If we have measurements, show clear, export buttons
                 if curve.points.len() > 0 {
@@ -81,36 +86,7 @@ impl eframe::App for ViyLineApp {
                     if ui.button("Export").clicked() {
                         self.showExportWindow = !self.showExportWindow;
                     }
-
-                    if self.showExportWindow {
-                        egui::Window::new("Export data window").show(ctx, |ui| {
-                            ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
-
-                            // // (re)Build the output CSV
-                            if ui.button("Export CSV").clicked() {
-                                self.outputCSV = String::from("index,     V,      I\n");
-
-                                // V open circuit
-                                // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                                let Voc = (curve.A/curve.B).ln() / curve.k;
-                                let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
-
-                                // For every dv
-                                for i in 0..self.exportNOfPoints {
-                                    // Calculate next IV point
-                                    let V = dV * (i as f64);
-                                    let I = curve.interpolatedValueAt(V);
-                                    self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
-                                    if I < 0.0 {break;}
-                                }
-                            }
-
-                            // Add text box
-                            ui.add(egui::TextEdit::multiline(&mut self.outputCSV).font(egui::TextStyle::Monospace));
-                        });
-                    }
                 }
-
 
                 // Serial port Combo Box connection
                 ui.separator();
@@ -125,8 +101,8 @@ impl eframe::App for ViyLineApp {
                                 ui.selectable_value(&mut self.portName, portName.clone(), portName);
                             }
                         }
-                    });
-
+                    }
+                );
 
                 // Bluetooth Connect Button
                 ui.separator();
@@ -137,7 +113,6 @@ impl eframe::App for ViyLineApp {
                 } else {
                     ui.label("Bluetooth Connected");
                 }
-
             });
 
             // Repository, version
@@ -145,8 +120,54 @@ impl eframe::App for ViyLineApp {
                 ui.horizontal(|ui| {
                     ui.label(format!("[v{}]", env!("CARGO_PKG_VERSION")));
                     ui.hyperlink_to("GitHub", "https://github.com/BrokenSource/ViyLine");
+                    egui::global_dark_light_mode_switch(ui);
                 });
             });
+
+            // Export points from curve window
+            if self.showExportWindow {
+                egui::Window::new("Export data window").show(ctx, |ui| {
+                    ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
+
+                    // // (re)Build the output CSV
+                    if ui.button("Export CSV").clicked() {
+                        self.outputCSV = String::from("index,     V,      I\n");
+
+                        // V open circuit
+                        // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
+                        let Voc = (curve.A/curve.B).ln() / curve.k;
+                        let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
+
+                        // For every dv
+                        for i in 0..self.exportNOfPoints {
+                            // Calculate next IV point
+                            let V = dV * (i as f64);
+                            let I = curve.interpolatedValueAt(V);
+                            self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
+                            if I < 0.0 {break;}
+                        }
+                    }
+
+                    // Add text box
+                    ui.add(egui::TextEdit::multiline(&mut self.outputCSV).font(egui::TextStyle::Monospace));
+                });
+            }
+
+            // Configuration window
+            if self.showConfigurationWindow {
+                egui::Window::new("Configurations").show(ctx, |ui| {
+                    egui::Grid::new("configurationWindowGrid")
+                        .num_columns(2)
+                        .spacing([40.0, 4.0])
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.label("Bluetooth Name:");
+                            ui.add(egui::TextEdit::singleline(&mut self.viylineHardwareBluetoothDeviceName).hint_text("HC-06 Configured Name"));
+                            ui.end_row();
+                        });
+
+                });
+            }
         });
 
         // Technical info

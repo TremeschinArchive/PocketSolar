@@ -52,6 +52,7 @@ pub struct ViyLineApp {
     plotCurve: bool,
 
     // Export Window
+    #[serde(skip)]
     showExportWindow: bool,
     exportNOfPoints: i64,
     outputCSV: String,
@@ -68,6 +69,11 @@ pub struct ViyLineApp {
     #[serde(skip)]
     serialPort: Option<Box<dyn serialport::SerialPort>>,
     portName: String,
+
+    // Other configurations
+    #[serde(skip)]
+    showConfigurationWindow: bool,
+    viylineHardwareBluetoothDeviceName: String,
 }
 
 impl ViyLineApp {
@@ -78,13 +84,14 @@ impl ViyLineApp {
             return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
+        // Default configuration
         return ViyLineApp {
             plotPoints: true,
             plotCurve: true,
             exportNOfPoints: 20,
             Ki: 1.0,
-            Kv: 1.0,
-
+            Kv: 10.0,
+            viylineHardwareBluetoothDeviceName: String::from("HC-06"),
             ..ViyLineApp::default()
         };
     }
@@ -96,26 +103,29 @@ impl ViyLineApp {
 impl ViyLineApp {
 
     // Abstraction: Read 8 bits from the measure hardware
-    fn picRead(&mut self) -> u8 {
+    fn picRead(&mut self) -> Result<u8, ()> {
         if self.serialPort.is_some() {
             self.openSerialPort(&self.portName.clone());
-            return self.serialPortRead();
+            return Ok(self.serialPortRead());
         }
         if self.hc06.is_some() {
-            return self.bluetoothRead();
+            return Ok(self.bluetoothRead());
         };
-        return 0;
+        return Err(());
     }
 
     // Abstraction: Write 8 bits from the measure hardware
-    fn picWrite(&mut self, data: u8) {
+    fn picWrite(&mut self, data: u8) -> Result<(), ()> {
         if self.serialPort.is_some() {
             self.openSerialPort(&self.portName.clone());
-            return self.serialPortWrite(data);
+            self.serialPortWrite(data);
+            return Ok(());
         }
         if self.hc06.is_some() {
-            return self.bluetoothWrite(data);
+            self.bluetoothWrite(data);
+            return Ok(());
         };
+        return Err(());
     }
 }
 

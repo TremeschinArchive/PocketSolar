@@ -42,8 +42,8 @@ impl ViyLineApp {
                 let mac = properties.address;
                 info!("- Peripheral [MAC: {mac}] [{local_name}]");
 
-                // Only connect to HC-06
-                if local_name != "HC-06" {continue;}
+                // Only connect to HC-06 ViyLine™ Hardware
+                if local_name != self.viylineHardwareBluetoothDeviceName {continue;}
                 info!("Match!");
 
                 // Connect if not paired
