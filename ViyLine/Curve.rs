@@ -1,12 +1,14 @@
 // | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
 use crate::*;
 
+#[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Default, Clone)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Default, Clone)]
 pub struct Curve {
     pub points: Vec<Point>,
@@ -76,6 +78,9 @@ impl Curve {
     // Empty the curve
     pub fn clear(&mut self) {
         self.points = Vec::new();
+        self.A = 0.0;
+        self.B = 0.0;
+        self.k = 0.0;
     }
 
     pub fn addPoint(&mut self, x: f64, y: f64) {

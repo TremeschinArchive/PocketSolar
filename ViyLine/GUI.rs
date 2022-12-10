@@ -5,20 +5,21 @@ impl eframe::App for ViyLineApp {
 
     // Save state on window shut down
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
+        eframe::set_value(storage, "ViyLine", self);
+    }
+
+    fn auto_save_interval(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(1)
     }
 
     // Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
         // Calculate IV curve
-        let mut curve = self.ivCurve.clone();
-        curve.calculateCoefficients();
+        self.solarPanelCurve.calculateCoefficients();
 
         // Top bar
         egui::TopBottomPanel::top("topPanel").show(ctx, |ui| {
-            curve.addPoint(0.0, 0.0);
-
             ui.horizontal(|ui| {
                 // Title
                 ui.heading("ViyLine");
@@ -72,15 +73,15 @@ impl eframe::App for ViyLineApp {
                             let I = ((upperI*256.0 + lowerI)/1023.0) * self.Kv;
 
                             info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
-                            self.ivCurve.addPoint(V, I);
+                            self.solarPanelCurve.addPoint(V, I);
                         }
                     }
                 }
 
                 // If we have measurements, show clear, export buttons
-                if curve.points.len() > 0 {
+                if self.solarPanelCurve.points.len() > 0 {
                     if ui.button("Clear").clicked() {
-                        self.ivCurve.clear();
+                        self.solarPanelCurve.clear();
                     }
 
                     if ui.button("Export").clicked() {
@@ -135,14 +136,14 @@ impl eframe::App for ViyLineApp {
 
                         // V open circuit
                         // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                        let Voc = (curve.A/curve.B).ln() / curve.k;
+                        let Voc = (self.solarPanelCurve.A/self.solarPanelCurve.B).ln() / self.solarPanelCurve.k;
                         let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
 
                         // For every dv
                         for i in 0..self.exportNOfPoints {
                             // Calculate next IV point
                             let V = dV * (i as f64);
-                            let I = curve.interpolatedValueAt(V);
+                            let I = self.solarPanelCurve.interpolatedValueAt(V);
                             self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
                             if I < 0.0 {break;}
                         }
@@ -164,8 +165,17 @@ impl eframe::App for ViyLineApp {
                             ui.label("Bluetooth Name:");
                             ui.add(egui::TextEdit::singleline(&mut self.viylineHardwareBluetoothDeviceName).hint_text("HC-06 Configured Name"));
                             ui.end_row();
-                        });
 
+                            if ui.button("Add synthetic points").clicked() {
+                                self.solarPanelCurve.addPoint( 0.0, 10.0);
+                                self.solarPanelCurve.addPoint(40.0, 9.34);
+                                self.solarPanelCurve.addPoint(50.0,  0.0);
+                            }
+
+                            ui.checkbox(&mut self.plotInteractive, "Interactive Plot")
+                                .on_hover_text("Allows zoom, scrolling, dragging on the plot.");
+
+                        });
                 });
             }
         });
@@ -176,9 +186,12 @@ impl eframe::App for ViyLineApp {
             // Info and plot options
             ui.horizontal(|ui| {
                 egui::warn_if_debug_build(ui);
-                ui.label(format!("Function:  i(v) = {:.2} - ({:.3e})exp({:.4}v)", curve.A, curve.B, curve.k));
-                ui.checkbox(&mut self.plotPoints, "Plot Points");
-                ui.checkbox(&mut self.plotCurve, "Plot Curve");
+                ui.label(format!("IV(v) = {:.2} - ({:.3e})exp({:.4}v)", self.solarPanelCurve.A, self.solarPanelCurve.B, self.solarPanelCurve.k));
+
+                ui.separator();
+                ui.label("Plot curve:");
+                ui.checkbox(&mut self.plotIVcurve, "IV");
+                ui.checkbox(&mut self.plotPVcurve, "PV");
 
                 // Amplification factors
                 ui.separator();
@@ -186,22 +199,27 @@ impl eframe::App for ViyLineApp {
                 ui.add(egui::DragValue::new(&mut self.Ki).speed(0.1).fixed_decimals(3));
                 ui.label("Kv:").on_hover_text("Voltage amplification factor relative to 5 V input on the microcontroller");
                 ui.add(egui::DragValue::new(&mut self.Kv).speed(0.1).fixed_decimals(3));
+
+                ui.separator();
+                ui.checkbox(&mut self.plotPoints, "Plot Points");
             });
         });
 
         // Main plot
         egui::CentralPanel::default().show(ctx, |ui| {
 
-            // Main plot
-            Plot::new("lines_demo")
-                // .allow_zoom(false)
-                // .allow_scroll(false)
-                // .allow_boxed_zoom(false)
-                // .allow_drag(false)
+            // Main Solar Panel Curves Plot
+            Plot::new("solarPanelCurvesPlot")
+                .allow_zoom(self.plotInteractive)
+                .allow_scroll(self.plotInteractive)
+                .allow_boxed_zoom(self.plotInteractive)
+                .allow_drag(self.plotInteractive)
+                // .auto_bounds_x()
                 .show(ui, |plot_ui| {
 
                 // Plot continuous IV curve
-                if self.plotCurve {
+                if self.plotIVcurve {
+                    let curve = self.solarPanelCurve.clone();
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
@@ -215,9 +233,25 @@ impl eframe::App for ViyLineApp {
                     });
                 }
 
+                // Plot PV curve
+                if self.plotPVcurve {
+                    let curve = self.solarPanelCurve.clone();
+                    plot_ui.line({
+                        Line::new(PlotPoints::from_explicit_callback(
+                            move |x| {
+                                if x < 0.0 {return 0.0;}
+                                let I = curve.interpolatedValueAt(x);
+                                if I < 0.0 {return 0.0;}
+                                return I*x * (7.0/260.0);
+                            }, .., 512,
+                        ))
+                        .width(5.0)
+                    });
+                }
+
                 // Plot points on graph
                 if self.plotPoints {
-                    for point in &self.ivCurve.points {
+                    for point in &self.solarPanelCurve.points {
                         if point.y < 0.0 { continue; }
                         plot_ui.points(
                             Points::new([point.x, point.y])

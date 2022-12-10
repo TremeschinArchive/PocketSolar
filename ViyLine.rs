@@ -38,8 +38,8 @@ mod GUI;
 #[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Default)]
 pub struct ViyLineApp {
-    #[serde(skip)]
-    ivCurve: Curve::Curve,
+    // #[serde(skip)]
+    solarPanelCurve: Curve::Curve,
 
     // Hardware configuration
 
@@ -49,10 +49,11 @@ pub struct ViyLineApp {
 
     // Plot options
     plotPoints: bool,
-    plotCurve: bool,
+    plotIVcurve: bool,
+    plotPVcurve: bool,
+    plotInteractive: bool,
 
     // Export Window
-    #[serde(skip)]
     showExportWindow: bool,
     exportNOfPoints: i64,
     outputCSV: String,
@@ -71,7 +72,6 @@ pub struct ViyLineApp {
     portName: String,
 
     // Other configurations
-    #[serde(skip)]
     showConfigurationWindow: bool,
     viylineHardwareBluetoothDeviceName: String,
 }
@@ -81,13 +81,15 @@ impl ViyLineApp {
 
         // Restore previous settings if any
         if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            return eframe::get_value(storage, "ViyLine").unwrap_or_default();
         }
 
         // Default configuration
         return ViyLineApp {
             plotPoints: true,
-            plotCurve: true,
+            plotIVcurve: true,
+            plotPVcurve: false,
+            plotInteractive: false,
             exportNOfPoints: 20,
             Ki: 1.0,
             Kv: 10.0,
