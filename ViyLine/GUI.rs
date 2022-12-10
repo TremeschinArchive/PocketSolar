@@ -62,8 +62,8 @@ impl eframe::App for ViyLineApp {
                             let upperI = readByte(self) as f64;
                             let lowerI = readByte(self) as f64;
 
-                            let V = ((upperV*256.0 + lowerV)/1023.0) * 5.0;
-                            let I = ((upperI*256.0 + lowerI)/1023.0) * 5.0;
+                            let V = ((upperV*256.0 + lowerV)/1023.0) * 5.0 * self.Ki;
+                            let I = ((upperI*256.0 + lowerI)/1023.0) * 5.0 * self.Kv;
 
                             info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
                             self.ivCurve.addPoint(V, I);
@@ -158,6 +158,13 @@ impl eframe::App for ViyLineApp {
                 ui.label(format!("Function:  i(v) = {:.2} - ({:.3e})exp({:.4}v)", curve.A, curve.B, curve.k));
                 ui.checkbox(&mut self.plotPoints, "Plot Points");
                 ui.checkbox(&mut self.plotCurve, "Plot Curve");
+
+                // Amplification factors
+                ui.separator();
+                ui.label("Ki:").on_hover_text("Current amplification factor relative to 5 V input on the microcontroller");
+                ui.add(egui::DragValue::new(&mut self.Ki).speed(0.1).fixed_decimals(3));
+                ui.label("Kv:").on_hover_text("Voltage amplification factor relative to 5 V input on the microcontroller");
+                ui.add(egui::DragValue::new(&mut self.Kv).speed(0.1).fixed_decimals(3));
             });
         });
 
@@ -165,7 +172,12 @@ impl eframe::App for ViyLineApp {
         egui::CentralPanel::default().show(ctx, |ui| {
 
             // Main plot
-            Plot::new("lines_demo").show(ui, |plot_ui| {
+            Plot::new("lines_demo")
+                // .allow_zoom(false)
+                // .allow_scroll(false)
+                // .allow_boxed_zoom(false)
+                // .allow_drag(false)
+                .show(ui, |plot_ui| {
 
                 // Plot continuous IV curve
                 if self.plotCurve {

@@ -9,7 +9,6 @@ use egui::plot::Plot;
 use egui::plot::PlotPoints;
 use egui::plot::Points;
 use egui::Color32;
-use libm::*;
 
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::api::WriteType;
@@ -41,6 +40,12 @@ mod GUI;
 pub struct ViyLineApp {
     #[serde(skip)]
     ivCurve: Curve::Curve,
+
+    // Hardware configuration
+
+    // Current and Voltage amplification factor
+    Ki: f64,
+    Kv: f64,
 
     // Plot options
     plotPoints: bool,
@@ -77,6 +82,8 @@ impl ViyLineApp {
             plotPoints: true,
             plotCurve: true,
             exportNOfPoints: 20,
+            Ki: 1.0,
+            Kv: 1.0,
 
             ..ViyLineApp::default()
         };

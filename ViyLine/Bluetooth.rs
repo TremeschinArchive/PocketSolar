@@ -29,45 +29,43 @@ impl ViyLineApp {
             // Scan for peripherals
             adapter.start_scan(ScanFilter::default()).await.unwrap();
 
-            loop {
-                // FIXME: Wasm unreachable
-                let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
-                info!(":: List of Peripherals:");
-                async_std::task::sleep(std::time::Duration::from_millis(500)).await;
+            // FIXME: Wasm unreachable
+            let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
+            info!(":: List of Peripherals:");
+            async_std::task::sleep(std::time::Duration::from_millis(500)).await;
 
-                for peripheral in peripherals.iter() {
-                    let properties = peripheral.properties().await.expect("Can't get properties").unwrap();
-                    // let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
+            for peripheral in peripherals.iter() {
+                let properties = peripheral.properties().await.expect("Can't get properties").unwrap();
+                // let local_name = properties.unwrap().local_name.unwrap_or(String::from("Unknown Name"));
 
-                    let local_name = properties.local_name.unwrap_or(String::from("Unknown Name"));
-                    let mac = properties.address;
-                    info!("- Peripheral [MAC: {mac}] [{local_name}]");
+                let local_name = properties.local_name.unwrap_or(String::from("Unknown Name"));
+                let mac = properties.address;
+                info!("- Peripheral [MAC: {mac}] [{local_name}]");
 
-                    // Only connect to HC-06
-                    if local_name != "HC-06" {continue;}
-                    info!("Match!");
+                // Only connect to HC-06
+                if local_name != "HC-06" {continue;}
+                info!("Match!");
 
-                    // Connect if not paired
-                    if !peripheral.is_connected().await.unwrap() {
-                        if let Err(err) = peripheral.connect().await {
-                            info!(" - ERROR: {}", err);
-                            continue;
-                        }
+                // Connect if not paired
+                if !peripheral.is_connected().await.unwrap() {
+                    if let Err(err) = peripheral.connect().await {
+                        info!(" - ERROR: {}", err);
+                        continue;
                     }
-
-                    // Show info on name
-                    info!(" - {}", local_name);
-
-                    // Discover services and characteristics
-                    peripheral.discover_services().await.unwrap();
-                    let characteristics = Some(peripheral.characteristics().clone());
-                    self.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
-                    self.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE1)).unwrap().clone());
-
-                    // Assign bluetooth module variables
-                    self.hc06 = Some(peripheral.clone());
-                    return;
                 }
+
+                // Show info on name
+                info!(" - {}", local_name);
+
+                // Discover services and characteristics
+                peripheral.discover_services().await.unwrap();
+                let characteristics = Some(peripheral.characteristics().clone());
+                self.writeCharacteristic = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE2)).unwrap().clone());
+                self.readCharacteristic  = Some(characteristics.as_ref().unwrap().iter().find(|c| c.uuid == uuid_from_u16(0xFFE1)).unwrap().clone());
+
+                // Assign bluetooth module variables
+                self.hc06 = Some(peripheral.clone());
+                return;
             }
         }
     }
