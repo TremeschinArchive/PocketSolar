@@ -29,6 +29,7 @@ impl eframe::App for ViyLineApp {
 
                 // Buttons / Actions
                 if ui.button("Measure").clicked() {
+                    self.attemptOpenSerialPort();
 
                     // Read an unsigned int 8 from serial port
                     fn readByte(app: &mut ViyLineApp) -> Result<u8, ()> {
@@ -77,6 +78,8 @@ impl eframe::App for ViyLineApp {
                             self.solarPanelCurve.addPoint(V, I);
                         }
                     }
+
+                    self.calculateRegression();
                 }
 
                 // If we have measurements, show clear, export buttons
@@ -134,6 +137,11 @@ impl eframe::App for ViyLineApp {
 
                     // // (re)Build the output CSV
                     if ui.button("Export CSV").clicked() {
+
+                        // Final export deserves more computation
+                        for _ in 1..20 {self.calculateRegression(); }
+
+                        // Start with keys
                         self.outputCSV = String::from("index,     V,      I\n");
 
                         // V open circuit
@@ -168,15 +176,28 @@ impl eframe::App for ViyLineApp {
                             ui.add(egui::TextEdit::singleline(&mut self.viylineHardwareBluetoothDeviceName).hint_text("HC-06 Configured Name"));
                             ui.end_row();
 
+                            // Regression related
+                            ui.label("Regression steps:");
+                            ui.add(egui::DragValue::new(&mut self.regressionSteps).speed(1).clamp_range(1..=100));
+                            ui.end_row();
+
+                            // Checkboxes
+                            ui.checkbox(&mut self.recalculateRegressionOnCoefficientChanges, "Recalculate Regression");
+                            ui.checkbox(&mut self.plotInteractive, "Interactive Plot");
+                            ui.end_row();
+
                             if ui.button("Add synthetic points").clicked() {
                                 self.solarPanelCurve.addPoint( 0.0, 10.0);
                                 self.solarPanelCurve.addPoint(40.0, 9.34);
                                 self.solarPanelCurve.addPoint(50.0,  0.0);
+                                self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
                             }
 
-                            ui.checkbox(&mut self.plotInteractive, "Interactive Plot")
-                                .on_hover_text("Allows zoom, scrolling, dragging on the plot.");
+                            if ui.button("Recalculate regression").clicked() {
+                                self.calculateRegression();
+                            }
 
+                            ui.end_row();
                         });
                 });
             }

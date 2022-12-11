@@ -43,7 +43,7 @@ pub struct ViyLineApp {
 
     // Hardware configuration
 
-    // Current and Voltage amplification factor
+    // Current, voltage amplification factor
     Ki: f64,
     Kv: f64,
 
@@ -74,6 +74,10 @@ pub struct ViyLineApp {
     // Other configurations
     showConfigurationWindow: bool,
     viylineHardwareBluetoothDeviceName: String,
+
+    // Regression
+    regressionSteps: i64,
+    recalculateRegressionOnCoefficientChanges: bool,
 }
 
 impl ViyLineApp {
@@ -86,14 +90,30 @@ impl ViyLineApp {
 
         // Default configuration
         return ViyLineApp {
-            plotPoints: true,
-            plotIVcurve: true,
-            plotPVcurve: false,
-            plotInteractive: false,
-            exportNOfPoints: 20,
+
+            // Current, voltage amplification factor
             Ki: 1.0,
             Kv: 10.0,
+
+            // Plot options
+            plotPoints: true,
+            plotIVcurve: true,
+            plotPVcurve: true,
+            plotInteractive: false,
+
+            // Export
+            exportNOfPoints: 20,
+
+            // Bluetooth
             viylineHardwareBluetoothDeviceName: String::from("HC-06"),
+
+            // Serial
+            portName: String::from("None"),
+
+            // Regression
+            regressionSteps: 100,
+            recalculateRegressionOnCoefficientChanges: false,
+
             ..ViyLineApp::default()
         };
     }
@@ -113,7 +133,6 @@ impl ViyLineApp {
 
     // Abstraction: Read 8 bits from the measure hardware
     fn picRead(&mut self) -> Result<u8, ()> {
-        self.attemptOpenSerialPort();
 
         // Try serial port
         if self.serialPort.is_some() {
@@ -132,7 +151,6 @@ impl ViyLineApp {
 
     // Abstraction: Write 8 bits from the measure hardware
     fn picWrite(&mut self, data: u8) -> Result<(), ()> {
-        self.attemptOpenSerialPort();
 
         // Try serial port
         if self.serialPort.is_some() {
@@ -163,33 +181,9 @@ async fn trueMain() {
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
         return app;
     }));
-
-    // Compile WASM
-    #[cfg(target_arch = "wasm32")]
-    {
-        // Make sure panics are logged using `console.error`.
-        console_error_panic_hook::set_once();
-
-        // Redirect tracing to console.log and friends:
-        tracing_wasm::set_as_global_default();
-
-        eframe::start_web("ViyLine", eframe::WebOptions::default(), Box::new(|cc| {
-            let app = Box::new(ViyLineApp::new(cc));
-            cc.egui_ctx.set_visuals(egui::Visuals::dark());
-            return app;
-        })).expect("failed to start eframe");
-    }
 }
 
 #[tokio::main(flavor="current_thread")]
-#[cfg(not(target_arch="wasm32"))]
 async fn main() {
     trueMain().await;
-}
-
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    prokio::Runtime::default().spawn_pinned(move || async move {
-        trueMain().await;
-    });
 }

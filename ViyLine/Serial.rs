@@ -3,13 +3,16 @@ use crate::*;
 
 // Serial port
 impl ViyLineApp {
+
     // Open the COM serial port, FIXME: It must exist
     pub fn openSerialPort(&mut self, portName: &String) {
-        self.serialPort = Some(
-            serialport::new(portName, BAUDRATE)
-                .timeout(std::time::Duration::from_millis(4))
-                .open().expect("Failed to open port")
-        );
+        let serialPort = serialport::new(portName, BAUDRATE)
+            .timeout(std::time::Duration::from_millis(4)).open();
+
+        match serialPort {
+            Ok(port) => self.serialPort = Some(port),
+            _ => info!("Failed to open SerialPort [{portName}]"),
+        }
     }
 
     // Read 8 bits from serial port

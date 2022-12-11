@@ -14,17 +14,28 @@ pub struct Curve {
     pub points: Vec<Point>,
 
     // Curve parameters
-    #[serde(skip)]
     pub C: f64,
-    #[serde(skip)]
     pub A: f64,
-    #[serde(skip)]
     pub B: f64
 }
 
+impl ViyLineApp {
+
+    // Short hand for extra functionality
+    pub fn calculateRegression(&mut self) {
+        if self.recalculateRegressionOnCoefficientChanges {
+            self.solarPanelCurve.clearRegression();
+        }
+
+        // Calculate regression after measurement
+        self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
+    }
+}
+
 impl Curve {
+
     // Returns the coefficients
-    pub fn calculateCoefficients(&mut self) {
+    pub fn calculateCoefficients(&mut self, steps: i64) {
 
         // If we even have some points
         if self.points.len() > 0 {
@@ -36,8 +47,7 @@ impl Curve {
             let maxY = self.minMaxY().unwrap().1;
 
             // Repeat until we get a nice estimate of B
-            for _ in 1..50 {
-
+            for _ in 1..=steps {
                 // Update A coefficient based on last iteration values
                 self.A = maxY + self.B;
 
@@ -79,16 +89,20 @@ impl Curve {
         return Some((*minY, *maxY));
     }
 
-    // Empty the curve
-    pub fn clear(&mut self) {
-        self.points = Vec::new();
+    pub fn clearRegression(&mut self) {
         self.A = 0.0;
         self.B = 0.0;
         self.C = 0.0;
     }
 
+    // Empty the curve
+    pub fn clear(&mut self) {
+        self.points = Vec::new();
+        self.clearRegression();
+    }
+
     pub fn addPoint(&mut self, x: f64, y: f64) {
+        info!("Adding point (X: {x:6.3}, Y: {y:6.3})");
         self.points.push(Point { x: x, y: y });
-        self.calculateCoefficients();
     }
 }

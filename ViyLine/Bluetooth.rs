@@ -13,6 +13,9 @@ impl ViyLineApp {
     pub fn bluetoothRead(&self) -> u8 {
         return block_on(self.hc06.as_ref().unwrap().read(&self.readCharacteristic.as_ref().unwrap())).unwrap()[0];
     }
+}
+
+impl ViyLineApp {
 
     // Auto connect on HC06 module
     pub async fn findBluetooth(&mut self) {
