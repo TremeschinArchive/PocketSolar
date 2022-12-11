@@ -14,7 +14,7 @@ pub struct Curve {
     pub points: Vec<Point>,
 
     // Curve parameters
-    pub k: f64,
+    pub C: f64,
     pub A: f64,
     pub B: f64
 }
@@ -47,14 +47,15 @@ impl Curve {
                 let sumY:   f64 = y.iter().sum();
                 let sumXY:  f64 = x.iter().zip(y).map(|(a, b)| a*b).sum();
                 let sumXSq: f64 = x.iter().map(|a| a*a).sum();
-                let n = self.points.len() as f64;
+                let n:      f64 = self.points.len() as f64;
 
                 // y = ax + b
                 let a = (n*sumXY - sumX*sumY)/(n*sumXSq - sumX.powf(2.0));
                 let b = (sumY - a*sumX)/n;
 
-                // On the linearized iv curve, for y = A - Be^kx, we have ln(y) = -kx + ln(B)
-                self.k = a;
+                // On the linearized iv curve, for y = A - Be^Cx, we have ln(y) = -Cx + ln(B)
+                // So C = a and ln(B) = b
+                self.C = a;
                 self.B = exp(b);
             }
         }
@@ -62,7 +63,7 @@ impl Curve {
 
     // Calculate a generic point X
     pub fn interpolatedValueAt(&self, x: f64) -> f64 {
-        return self.A - self.B*exp(self.k*x);
+        return self.A - self.B*exp(self.C*x);
     }
 
     // Minimum and maximum value of the curve
@@ -80,7 +81,7 @@ impl Curve {
         self.points = Vec::new();
         self.A = 0.0;
         self.B = 0.0;
-        self.k = 0.0;
+        self.C = 0.0;
     }
 
     pub fn addPoint(&mut self, x: f64, y: f64) {

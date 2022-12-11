@@ -136,7 +136,7 @@ impl eframe::App for ViyLineApp {
 
                         // V open circuit
                         // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                        let Voc = (self.solarPanelCurve.A/self.solarPanelCurve.B).ln() / self.solarPanelCurve.k;
+                        let Voc = (self.solarPanelCurve.A/self.solarPanelCurve.B).ln() / self.solarPanelCurve.C;
                         let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
 
                         // For every dv
@@ -186,7 +186,7 @@ impl eframe::App for ViyLineApp {
             // Info and plot options
             ui.horizontal(|ui| {
                 egui::warn_if_debug_build(ui);
-                ui.label(format!("IV(v) = {:.2} - ({:.3e})exp({:.4}v)", self.solarPanelCurve.A, self.solarPanelCurve.B, self.solarPanelCurve.k));
+                ui.label(format!("IV(v) = {:.2} - ({:.3e})exp({:.4}v)", self.solarPanelCurve.A, self.solarPanelCurve.B, self.solarPanelCurve.C));
 
                 ui.separator();
                 ui.label("Plot curve:");
