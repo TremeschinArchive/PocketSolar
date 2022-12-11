@@ -112,7 +112,7 @@ for iteration, t in enumerate(arange(0, 0.2, dt)):
 # -------------------------------------------------------|
 # Constructing plotly figure
 
-# Make subplots for the
+# Make subplots
 fig = make_subplots(rows=2, cols=1)
 fig.layout.font.size = 24
 
@@ -143,6 +143,6 @@ for name, data in toPlot:
 # -------------------------------------------------------|
 # Figure 1: IV curve
 
-plot("Curva VI", VIx, VIy, 2)
+plot("IV Curve", VIx, VIy, 2)
 
 fig.show()

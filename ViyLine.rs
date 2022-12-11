@@ -104,29 +104,49 @@ impl ViyLineApp {
 // Serial + Bluetooth. We can probably do better than this, returning Result
 impl ViyLineApp {
 
+    // Must have some target port name
+    fn attemptOpenSerialPort(&mut self) {
+        if self.portName != String::from("None") {
+            self.openSerialPort(&self.portName.clone());
+        }
+    }
+
     // Abstraction: Read 8 bits from the measure hardware
     fn picRead(&mut self) -> Result<u8, ()> {
+        self.attemptOpenSerialPort();
+
+        // Try serial port
         if self.serialPort.is_some() {
             self.openSerialPort(&self.portName.clone());
             return Ok(self.serialPortRead());
         }
+
+        // Try bluetooth
         if self.hc06.is_some() {
             return Ok(self.bluetoothRead());
         };
+
+        error!("Couldn't read from PIC from either Bluetooth or Serial");
         return Err(());
     }
 
     // Abstraction: Write 8 bits from the measure hardware
     fn picWrite(&mut self, data: u8) -> Result<(), ()> {
+        self.attemptOpenSerialPort();
+
+        // Try serial port
         if self.serialPort.is_some() {
-            self.openSerialPort(&self.portName.clone());
             self.serialPortWrite(data);
             return Ok(());
         }
+
+        // Try bluetooth
         if self.hc06.is_some() {
             self.bluetoothWrite(data);
             return Ok(());
         };
+
+        error!("Couldn't write from PIC from either Bluetooth or Serial");
         return Err(());
     }
 }

@@ -57,7 +57,10 @@ impl eframe::App for ViyLineApp {
                             let value = self.picRead();
                             match value {
                                 Ok(value) => {if value == 0xFF {break;}},
-                                Err(()) => {break 'timesLoop;},
+                                Err(()) => {
+                                    error!("Error on reading from PIC, either no SerialPort or no Bluetooth");
+                                    break 'timesLoop;
+                                },
                             };
                         }
 
@@ -96,6 +99,7 @@ impl eframe::App for ViyLineApp {
                     .selected_text(format!("{}", &mut self.portName))
                     .show_ui(ui, |ui| {
                         let ports = serialport::available_ports();
+                        ui.selectable_value(&mut self.portName, String::from("None"), String::from("None"));
                         if ports.is_ok() {
                             for port in ports.unwrap().iter() {
                                 let portName = port.port_name.clone();
