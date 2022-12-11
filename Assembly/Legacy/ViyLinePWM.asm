@@ -4,6 +4,9 @@ list p=16f877a
 __CONFIG _HS_OSC & _WDT_OFF & _PWRTE_ON & _BODEN_OFF & _LVP_OFF
 ERRORLEVEL -305, -302
 
+; This code was once coded for ViyLine using PWM and inductor on
+; series, but the theory and components didn't seem to work IRL.
+
 ; |------------------------------------------------------------------| ;
 
 memoryPage0    macro
