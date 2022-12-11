@@ -15,9 +15,6 @@ impl eframe::App for ViyLineApp {
     // Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
 
-        // Calculate IV curve
-        self.solarPanelCurve.calculateCoefficients();
-
         // Top bar
         egui::TopBottomPanel::top("topPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -65,7 +62,8 @@ impl eframe::App for ViyLineApp {
                         }
 
                         // Read measurements
-                        for _ in 1..=20 {
+                        for p in 1..=20 {
+                            info!("Reading 4 bytes for Point #{p}");
                             let upperV = readByte(self).unwrap() as f64;
                             let lowerV = readByte(self).unwrap() as f64;
                             let upperI = readByte(self).unwrap() as f64;

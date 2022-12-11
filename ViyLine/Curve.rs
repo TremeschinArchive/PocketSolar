@@ -14,8 +14,11 @@ pub struct Curve {
     pub points: Vec<Point>,
 
     // Curve parameters
+    #[serde(skip)]
     pub C: f64,
+    #[serde(skip)]
     pub A: f64,
+    #[serde(skip)]
     pub B: f64
 }
 
@@ -86,5 +89,6 @@ impl Curve {
 
     pub fn addPoint(&mut self, x: f64, y: f64) {
         self.points.push(Point { x: x, y: y });
+        self.calculateCoefficients();
     }
 }
