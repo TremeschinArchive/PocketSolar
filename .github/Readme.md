@@ -1,7 +1,7 @@
 👆【☰】Table of Contents
 
 <div align="center">
-  <img src="https://github.com/BrokenSource/ViyLine/raw/Master/Website/icon.png" onerror="this.src='../Website/icon.png'" width="256"/>
+  <img src="https://github.com/BrokenSource/ViyLine/raw/Master/ViyLine/icon.png" onerror="this.src='../ViyLine/icon.png'" width="256"/>
 
     ViyLine - Vee Aye Line
 
