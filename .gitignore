@@ -1,1 +1,7 @@
 _*
+
+# Assembly
+*.lst
+*.err
+*.hex
+*.O

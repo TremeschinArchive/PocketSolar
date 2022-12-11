@@ -36,14 +36,7 @@ Read our [Paper](https://github.com/BrokenSource/ViyLine/raw/Master/Paper/Paper.
 
 <br>
 
-2. (optional) **(Web/WASM)** Compile and run ViyLine on a browser
-    - `cargo install trunk`
-    - `trunk serve --release`
-    - Web version does NOT have Bluetooth working and potentially no Serial, so it's useless.
-
-<br>
-
-3. Building the Assembly
+2. Building the Assembly
     - You'll need to download MPLAB and compile the `.asm` code with `MPASMWIN.exe` to generate the `.hex` sent to the microcontroller.
     - Copy `mpasm` folder (that has `MPASMWIN.exe`, `p*.inc`) from installation to `./Assembly/thirdparty/mpasm`.
     - Either run `Compile.sh` in Linux/MacOS or on Windows open a PowerShell and run `MPASMWIN.exe /q /p16F877A "ViyLineCAP.asm"`

@@ -80,7 +80,7 @@ copy            macro fileA, fileB
 ; Transmit a literal
 txliteral       macro literal
     movlw       literal
-    call        TxCarUART
+    call        transmitUART
     endm
 
 ; Notify Rust PIC is busy
@@ -97,25 +97,91 @@ notifyFree      macro
 ; Setup
 
 setup:
-    memoryPage1
-        ; RB0 and RB1 control the capacitor
-        clrf        TRISB
+    ; Setup UART communication with the external world
+    setupUART:
+        memoryPage0
+            call clearOverrun
 
-        ; AN0, AN1, AN3 as analog
-        movlf       0x84,ADCON1
+            ; Enable serial 8 bits
+            movlf       0x90,RCSTA
 
-    ; Clear measurements and dischage capacitor default state
+            ; Clear buffers
+            clrf        TXREG
+            clrf        RCREG
+
+        memoryPage1
+            ; Async TX, 8 bits, BRGH=1
+            movlf       0x24,TXSTA
+
+            ; Baud rate = 9600 for BRGH=1
+            movlf       D'129',SPBRG
+
+    ; Default state for the capacitor measurements
+    setupMeasure:
+        memoryPage1
+            ; RB0 and RB1 control the capacitor
+            clrf        TRISB
+
+            ; AN0, AN1, AN3 as analog
+            movlf       0x84,ADCON1
+
+        ; Clear measurements and dischage capacitor default state
+        memoryPage0
+            call	    setupUART
+
+            ; Clear measure circuit
+            call        clearMeasurements
+            call        dischargeCapacitor
+
     memoryPage0
-	    call	    setupUART
-        call        clearMeasurements
-        call        dischargeCapacitor
-
     goto        main
+
+; |------------------------------------------------------------------| ;
+; UART
+
+cblock 0x20
+    receivedData
+endc
+
+; Clear error bit due overrun
+clearOverrun:
+    bcf		    RCSTA,CREN
+    nop
+    bsf		    RCSTA,CREN
+    return
+
+; Wait TX ready to transmit and transmit W
+transmitUART:
+    memoryPage1
+        btfss       TXSTA,TRMT
+        goto        $ - 1
+    memoryPage0
+        movwf       TXREG
+    return
+
+receiveUART:
+    ; Clear received data bool
+    bcf         receivedData,0
+
+    ; Check for errors with bit masking
+    movlw       B'00000110'
+    andwf       RCSTA,W
+    btfss       STATUS,Z
+    call        clearOverrun
+
+    ; Wait for RX data ready, return if not (non blocking)
+    btfss       PIR1,RCIF
+    return
+
+    ; Capture data to W and mark received
+    movf        RCREG,W
+    bsf         receivedData,1
+    return
 
 ; |------------------------------------------------------------------| ;
 ; Main
 
-cblock 0x20
+cblock
     ; The received data instruction from the outside world
     rxdata
 endc
@@ -126,8 +192,8 @@ main:
 
     ; Read some data from UART loop
     mainWaitRxLoop:
-        call        RxCarUART
-	    btfss	    flag_rx,0
+        call        receiveUART
+	    btfss	    receivedData,0
 	    goto	    mainWaitRxLoop
 
     ; Store received data
@@ -225,7 +291,7 @@ resetMeasurmentsPointer:
 ; Send the next pack of 8 bits to the outside world
 sendNextByte:
     movf        INDF,W
-	call        TxCarUART
+	call        transmitUART
     incf        FSR,F
     return
 
@@ -308,7 +374,5 @@ delay500ms:
     return
 
 ; |------------------------------------------------------------------| ;
-
-#include "UART.asm"
 
 END

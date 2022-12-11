@@ -27,8 +27,8 @@ class Simulation:
 # :: I(V) = IL - IOexp(qV/nkT)
 # :: y = A - B exp(Cx)
 Afv = 10
-Bfv = 0.076
-Cfv = 0.095
+Bfv = 0.0016
+Cfv = 0.165
 
 # Capacitance of the capacitor
 C = 7000 * 10**-6
@@ -68,7 +68,7 @@ VIy = []
 # -------------------------------------------------------|
 
 # For each t spaced by dt up untill 0.6 seconds
-for iteration, t in enumerate(arange(0, 0.2, dt)):
+for iteration, t in enumerate(arange(0, 0.07, dt)):
 
     # The energy stored on a capacitor is Q = VC
     # so the voltage across the capacitor is Q/C

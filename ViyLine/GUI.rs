@@ -187,8 +187,8 @@ impl eframe::App for ViyLineApp {
                             ui.end_row();
 
                             if ui.button("Add synthetic points").clicked() {
-                                self.solarPanelCurve.addPoint( 0.0, 10.0);
-                                self.solarPanelCurve.addPoint(40.0, 9.34);
+                                self.solarPanelCurve.addPoint( 0.0, 3.0);
+                                self.solarPanelCurve.addPoint(40.0, 2.84);
                                 self.solarPanelCurve.addPoint(50.0,  0.0);
                                 self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
                             }
@@ -246,10 +246,7 @@ impl eframe::App for ViyLineApp {
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
-                                if x < 0.0 {return 0.0;}
-                                let I = curve.interpolatedValueAt(x);
-                                if I < 0.0 {return 0.0;}
-                                return I;
+                                return curve.interpolatedValueAt(x);
                             }, .., 512,
                         ))
                         .width(5.0)
@@ -262,10 +259,7 @@ impl eframe::App for ViyLineApp {
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
-                                if x < 0.0 {return 0.0;}
-                                let I = curve.interpolatedValueAt(x);
-                                if I < 0.0 {return 0.0;}
-                                return I*x * (7.0/260.0);
+                                return x*(7.0/260.0)*curve.interpolatedValueAt(x);
                             }, .., 512,
                         ))
                         .width(5.0)
