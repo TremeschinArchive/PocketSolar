@@ -35,6 +35,22 @@ mod GUI;
 
 // ----------------------------------------------------------------------------|
 
+const ABOUT: &str = "
+ViyLine, a Solar Panel IV Curve Tracker
+
+(c) Tremeschin, AGPLv3-only License.";
+
+// CLI Arguments
+#[derive(Parser, Debug)]
+#[command(author="Tremeschin", version, about=ABOUT, long_about=None)]
+pub struct Args {
+    // Reset settings on boot
+    #[arg(short, long, help = "Reset to default settings")]
+    defaultSettings: bool,
+}
+
+// ----------------------------------------------------------------------------|
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Default)]
 pub struct ViyLineApp {
@@ -81,11 +97,13 @@ pub struct ViyLineApp {
 }
 
 impl ViyLineApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> ViyLineApp {
+    pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> ViyLineApp {
 
         // Restore previous settings if any
         if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, "ViyLine").unwrap_or_default();
+            if !args.defaultSettings {
+                return eframe::get_value(storage, "ViyLine").unwrap_or_default();
+            }
         }
 
         // Default configuration
@@ -173,11 +191,12 @@ impl ViyLineApp {
 
 async fn trueMain() {
     Protostar::setupLog();
+    let args = Args::parse();
 
     // Compile NATIVELY
     #[cfg(not(target_arch = "wasm32"))]
     eframe::run_native("ViyLine", eframe::NativeOptions::default(), Box::new(|cc| {
-        let app = Box::new(ViyLineApp::new(cc));
+        let app = Box::new(ViyLineApp::new(cc, args));
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
         return app;
     }));

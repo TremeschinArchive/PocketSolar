@@ -182,8 +182,10 @@ impl eframe::App for ViyLineApp {
                             ui.end_row();
 
                             // Checkboxes
-                            ui.checkbox(&mut self.recalculateRegressionOnCoefficientChanges, "Recalculate Regression");
-                            ui.checkbox(&mut self.plotInteractive, "Interactive Plot");
+                            ui.checkbox(&mut self.recalculateRegressionOnCoefficientChanges, "Clean Regression")
+                                .on_hover_text("Do not use incremental non linear regression, reset coefficients on every calculation");
+                            ui.checkbox(&mut self.plotInteractive, "Interactive Plot")
+                                .on_hover_text("");
                             ui.end_row();
 
                             if ui.button("Add synthetic points").clicked() {
