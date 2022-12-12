@@ -72,11 +72,26 @@ ViyLine code falls under the `MIT` License. The logos, schematics are under CC-B
 BibTeX entry for LaTeX:
 ```bibtex
 @electronic{viyline,
-    title    = {ViyLine: Traçador de Curva IV do Painel Solar},
-    keywords = {Rust, PIC, Assembly, Solar Panel, IV Curve},
-    url      = {https://github.com/BrokenSource/ViyLine},
-    author   = {Tremeschin; et al.},
-    year     = {2022},
-    abstract = {Pronunciado Vee-Aye-Line, este software escrito em Assembly e Rust, disponibilizado em Código Aberto, utilizando o microcontrolador da Microchip© PIC16F877A coleta pontos da Curva IV característica de um Painel Solar com tensões até 50V e corrente até 8A. Seu circuito de medição é composto por capacitores, que atuam como uma carga variável para a coleta de pontos da curva. Também possui uma interface gráfica e funciona com cabo USB Serial UART ou pelo módulo Bluetooth HC-06 para o envio de sinais e recebimento de dados. Possui uma modelagem matemática por métodos computacionais para melhor precisão dos dados exportados pela ferramenta, realizando uma regressão não linear para ajuste de curva dos pontos medidos em relação à curva teórica de operação de um painel solar, a fim de mitigar imprecisões de medição utilizando-se da estatística.},
+  title    = {ViyLine: Traçador de Curva IV do Painel Solar},
+  keywords = {Rust, PIC, Assembly, Solar Panel, IV Curve},
+  url      = {https://github.com/BrokenSource/ViyLine},
+  author   = {Tremeschin; et al.},
+  year     = {2022},
+  abstract = {
+    Pronunciado Vee-Aye-Line, este software escrito em
+    Assembly e Rust, disponibilizado em Código Aberto, utilizando
+    o microcontrolador da Microchip© PIC16F877A coleta pontos da
+    Curva IV característica de um Painel Solar com tensões até 50V
+    e corrente até 5A. Seu circuito de medição é composto por
+    capacitores, que atuam como uma carga variável para a coleta
+    de pontos da curva. Também possui uma interface gráfica e
+    funciona com cabo USB Serial UART ou pelo módulo Bluetooth
+    HC-06 para o envio de sinais e recebimento de dados. Possui
+    uma modelagem matemática por métodos computacionais para melhor
+    precisão dos dados exportados pela ferramenta, realizando uma
+    regressão não linear para ajuste de curva dos pontos medidos
+    em relação à curva teórica de operação de um painel solar, a
+    fim de mitigar imprecisões de medição utilizando-se da estatística.
+  },
 }
 ```
