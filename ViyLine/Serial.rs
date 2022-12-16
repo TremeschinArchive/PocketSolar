@@ -4,10 +4,9 @@ use crate::*;
 // Serial port
 impl ViyLineApp {
 
-    // Open the COM serial port, FIXME: It must exist
+    // Open the COM serial port
     pub fn openSerialPort(&mut self, portName: &String) {
-        let serialPort = serialport::new(portName, BAUDRATE)
-            .timeout(std::time::Duration::from_millis(4)).open();
+        let serialPort = serialport::new(portName, BAUDRATE).open();
 
         match serialPort {
             Ok(port) => self.serialPort = Some(port),

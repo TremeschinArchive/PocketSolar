@@ -34,8 +34,9 @@ impl ViyLineApp {
 
             // FIXME: Wasm unreachable
             let peripherals = adapter.peripherals().await.unwrap_or(Vec::new());
+            info!("Discovering peripherals..");
+            async_std::task::sleep(std::time::Duration::from_millis(5000)).await;
             info!(":: List of Peripherals:");
-            async_std::task::sleep(std::time::Duration::from_millis(500)).await;
 
             for peripheral in peripherals.iter() {
                 let properties = peripheral.properties().await.expect("Can't get properties").unwrap();

@@ -14,12 +14,12 @@ __CONFIG _HS_OSC & _WDT_OFF & _PWRTE_ON & _BODEN_OFF & _LVP_OFF
 ; |------------------------------------------------------------------| ;
 
 ; Constants
-Fosc	 equ .20
+Fosc	 equ .16
 baudrate equ .9600
 
 ; Capacitor states on PORTB
-capacitorChargeHex    equ 0x01
-capacitorDischargeHex equ 0x02
+capacitorChargeHex    equ B'00010001'
+capacitorDischargeHex equ B'00100010'
 
 ; Reset vector, first instruction is goto setup
 org         0x00
@@ -80,7 +80,7 @@ copy            macro fileA, fileB
 ; Transmit a literal
 txliteral       macro literal
     movlw       literal
-    call        transmitUART
+    call        TxCarUART
     endm
 
 ; Notify Rust PIC is busy
@@ -97,91 +97,25 @@ notifyFree      macro
 ; Setup
 
 setup:
-    ; Setup UART communication with the external world
-    setupUART:
-        memoryPage0
-            call clearOverrun
-
-            ; Enable serial 8 bits
-            movlf       0x90,RCSTA
-
-            ; Clear buffers
-            clrf        TXREG
-            clrf        RCREG
-
-        memoryPage1
-            ; Async TX, 8 bits, BRGH=1
-            movlf       0x24,TXSTA
-
-            ; Baud rate = 9600 for BRGH=1
-            movlf       D'129',SPBRG
-
-    ; Default state for the capacitor measurements
-    setupMeasure:
-        memoryPage1
-            ; RB0 and RB1 control the capacitor
-            clrf        TRISB
-
-            ; AN0, AN1, AN3 as analog
-            movlf       0x84,ADCON1
-
-        ; Clear measurements and dischage capacitor default state
-        memoryPage0
-            call	    setupUART
-
-            ; Clear measure circuit
-            call        clearMeasurements
-            call        dischargeCapacitor
-
-    memoryPage0
-    goto        main
-
-; |------------------------------------------------------------------| ;
-; UART
-
-cblock 0x20
-    receivedData
-endc
-
-; Clear error bit due overrun
-clearOverrun:
-    bcf		    RCSTA,CREN
-    nop
-    bsf		    RCSTA,CREN
-    return
-
-; Wait TX ready to transmit and transmit W
-transmitUART:
     memoryPage1
-        btfss       TXSTA,TRMT
-        goto        $ - 1
+        ; RB0 and RB1 control the capacitor
+        clrf        TRISB
+
+        ; AN0, AN1, AN3 as analog
+        movlf       0x84,ADCON1
+
+    ; Clear measurements and dischage capacitor default state
     memoryPage0
-        movwf       TXREG
-    return
+	    call	    setupUART
+        call        clearMeasurements
+        call        dischargeCapacitor
 
-receiveUART:
-    ; Clear received data bool
-    bcf         receivedData,0
-
-    ; Check for errors with bit masking
-    movlw       B'00000110'
-    andwf       RCSTA,W
-    btfss       STATUS,Z
-    call        clearOverrun
-
-    ; Wait for RX data ready, return if not (non blocking)
-    btfss       PIR1,RCIF
-    return
-
-    ; Capture data to W and mark received
-    movf        RCREG,W
-    bsf         receivedData,1
-    return
+    goto        main
 
 ; |------------------------------------------------------------------| ;
 ; Main
 
-cblock
+cblock 0x20
     ; The received data instruction from the outside world
     rxdata
 endc
@@ -192,8 +126,8 @@ main:
 
     ; Read some data from UART loop
     mainWaitRxLoop:
-        call        receiveUART
-	    btfss	    receivedData,0
+        call        RxCarUART
+	    btfss	    flag_rx,0
 	    goto	    mainWaitRxLoop
 
     ; Store received data
@@ -249,12 +183,11 @@ measureFull:
 
 ; Send some external signal saying we collected a point
 pointCollectedNotification:
-    btfsc       PORTB,2
+    btfsc       PORTB,6
     goto        $ + 3
-        bsf         PORTB,2
+        bsf         PORTB,6
         return
-    btfsc       PORTB,2
-    bcf         PORTB,2
+    bcf         PORTB,6
     return
 
 ; - - - - - - - - - - - - - - - - - - - ;
@@ -291,7 +224,7 @@ resetMeasurmentsPointer:
 ; Send the next pack of 8 bits to the outside world
 sendNextByte:
     movf        INDF,W
-	call        transmitUART
+	call        TxCarUART
     incf        FSR,F
     return
 
@@ -350,8 +283,8 @@ endc
 
 ; 1 ms delay function
 delay1ms:
-    movlf       0x7B,delayCounter1
-    movlf       0x07,delayCounter2
+    movlf       0x0C,delayCounter1
+    movlf       0x0D,delayCounter2
     delay1msLoop:
         decfsz      delayCounter1,F
         goto        delay1msLoop
@@ -361,9 +294,9 @@ delay1ms:
 
 ; 500 ms delay function
 delay500ms:
-    movlf       0xB5,delayCounter1
-    movlf       0xAF,delayCounter2
-    movlf       0x0D,delayCounter3
+    movlf       0x5C,delayCounter1
+    movlf       0x26,delayCounter2
+    movlf       0x0B,delayCounter3
     delay500msLoop:
         decfsz      delayCounter1,F
         goto        delay500msLoop
@@ -374,5 +307,7 @@ delay500ms:
     return
 
 ; |------------------------------------------------------------------| ;
+
+#include "UART.asm"
 
 END

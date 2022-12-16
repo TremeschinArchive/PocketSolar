@@ -102,7 +102,6 @@ impl Curve {
     }
 
     pub fn addPoint(&mut self, x: f64, y: f64) {
-        info!("Adding point (X: {x:6.3}, Y: {y:6.3})");
         self.points.push(Point { x: x, y: y });
     }
 }

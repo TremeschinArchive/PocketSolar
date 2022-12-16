@@ -62,6 +62,7 @@ pub struct ViyLineApp {
     // Current, voltage amplification factor
     Ki: f64,
     Kv: f64,
+    offset: f64,
 
     // Plot options
     plotPoints: bool,
@@ -112,6 +113,7 @@ impl ViyLineApp {
             // Current, voltage amplification factor
             Ki: 1.0,
             Kv: 10.0,
+            offset: 2.5,
 
             // Plot options
             plotPoints: true,
@@ -154,7 +156,6 @@ impl ViyLineApp {
 
         // Try serial port
         if self.serialPort.is_some() {
-            self.openSerialPort(&self.portName.clone());
             return Ok(self.serialPortRead());
         }
 
