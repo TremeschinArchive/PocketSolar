@@ -6,11 +6,14 @@ impl ViyLineApp {
 
     // Open the COM serial port
     pub fn openSerialPort(&mut self, portName: &String) {
-        let serialPort = serialport::new(portName, BAUDRATE).open();
+        if self.portName == String::from("None") {
+            error!("SerialPort is None");
+            return;
+        }
 
-        match serialPort {
+        match serialport::new(portName, BAUDRATE).open() {
             Ok(port) => self.serialPort = Some(port),
-            _ => info!("Failed to open SerialPort [{portName}]"),
+            _ => error!("Failed to open SerialPort [{portName}]"),
         }
     }
 

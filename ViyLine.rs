@@ -10,22 +10,12 @@ use egui::plot::PlotPoints;
 use egui::plot::Points;
 use egui::Color32;
 
-use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
-use btleplug::api::WriteType;
-use btleplug::platform::Manager;
-use btleplug::api::bleuuid::uuid_from_u16;
-
-use futures::executor::block_on;
-
 // ----------------------------------------------------------------------------|
 
 const BAUDRATE: u32 = 9600;
 
 #[path = "ViyLine/Curve.rs"]
 mod Curve;
-
-#[path = "ViyLine/Bluetooth.rs"]
-mod Bluetooth;
 
 #[path = "ViyLine/Serial.rs"]
 mod Serial;
@@ -75,14 +65,6 @@ pub struct ViyLineApp {
     exportNOfPoints: i64,
     outputCSV: String,
 
-    // Bluetooth
-    #[serde(skip)]
-    hc06: Option<btleplug::platform::Peripheral>,
-    #[serde(skip)]
-    readCharacteristic:  Option<btleplug::api::Characteristic>,
-    #[serde(skip)]
-    writeCharacteristic: Option<btleplug::api::Characteristic>,
-
     // Serial
     #[serde(skip)]
     serialPort: Option<Box<dyn serialport::SerialPort>>,
@@ -90,7 +72,6 @@ pub struct ViyLineApp {
 
     // Other configurations
     showConfigurationWindow: bool,
-    viylineHardwareBluetoothDeviceName: String,
 
     // Regression
     regressionSteps: i64,
@@ -124,9 +105,6 @@ impl ViyLineApp {
             // Export
             exportNOfPoints: 20,
 
-            // Bluetooth
-            viylineHardwareBluetoothDeviceName: String::from("HC-06"),
-
             // Serial
             portName: String::from("None"),
 
@@ -136,55 +114,6 @@ impl ViyLineApp {
 
             ..ViyLineApp::default()
         };
-    }
-}
-
-// ----------------------------------------------------------------------------|
-
-// Serial + Bluetooth. We can probably do better than this, returning Result
-impl ViyLineApp {
-
-    // Must have some target port name
-    fn attemptOpenSerialPort(&mut self) {
-        if self.portName != String::from("None") {
-            self.openSerialPort(&self.portName.clone());
-        }
-    }
-
-    // Abstraction: Read 8 bits from the measure hardware
-    fn picRead(&mut self) -> Result<u8, ()> {
-
-        // Try serial port
-        if self.serialPort.is_some() {
-            return Ok(self.serialPortRead());
-        }
-
-        // Try bluetooth
-        if self.hc06.is_some() {
-            return Ok(self.bluetoothRead());
-        };
-
-        error!("Couldn't read from PIC from either Bluetooth or Serial");
-        return Err(());
-    }
-
-    // Abstraction: Write 8 bits from the measure hardware
-    fn picWrite(&mut self, data: u8) -> Result<(), ()> {
-
-        // Try serial port
-        if self.serialPort.is_some() {
-            self.serialPortWrite(data);
-            return Ok(());
-        }
-
-        // Try bluetooth
-        if self.hc06.is_some() {
-            self.bluetoothWrite(data);
-            return Ok(());
-        };
-
-        error!("Couldn't write from PIC from either Bluetooth or Serial");
-        return Err(());
     }
 }
 

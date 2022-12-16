@@ -44,6 +44,7 @@ Read our [Paper](https://github.com/BrokenSource/ViyLine/raw/Master/Paper/Paper.
     - Copy `C:\\Program Files (x86)\Microchip\MPASM Suite` to `./Assembly/Thirdparty/MPASM Suite`.
     - Either run `Compile.sh` in Linux/MacOS or on Windows open a PowerShell and run `".\MPASM Suite\MPASMWIN.exe" /q /p16F877A "ViyLineCAP.asm"`
 
+Bluetooth connectivity can be achieved by pairing the HC06 and using its COM port available from the OS, otherwise you'll need to use an UART/USB serial cable communication.
 
 # ● Building the Circuit
 The circuit schematic will be provided at some point in the close future.

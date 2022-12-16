@@ -18,7 +18,6 @@ impl eframe::App for ViyLineApp {
         // Top bar
         egui::TopBottomPanel::top("topPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                // Title
                 ui.heading("ViyLine");
                 ui.separator();
 
@@ -29,57 +28,49 @@ impl eframe::App for ViyLineApp {
 
                 // Buttons / Actions
                 if ui.button("Measure").clicked() {
-                    self.attemptOpenSerialPort();
+                    self.openSerialPort(&self.portName.clone());
 
-                    // Read an unsigned int 8 from serial port
-                    fn readByte(app: &mut ViyLineApp) -> Result<u8, ()> {
-                        app.picWrite(0x01);
-                        return app.picRead();
-                    }
+                    if self.serialPort.is_some() {
 
-                    // Times to measure
-                    let times = match self.hc06 {
-                        None => vec![5, 15, 30, 50, 100, 150, 250],
-                        Some(_) => vec![40],
-                    };
-
-                    'timesLoop: for t in times {
-                        info!(":: Measure with DeltaT = {t}ms");
-
-                        // Clear and call new measuremen
-                        self.picWrite(t);
-
-                        // Syncronize PIC with Rust (wait for 0xFF else break on error)
-                        loop {
-                            std::thread::sleep(std::time::Duration::from_millis(1));
-                            let value = self.picRead();
-                            match value {
-                                Ok(value) => {if value == 0xFF {break;}},
-                                Err(()) => {
-                                    error!("Error on reading from PIC, either no SerialPort or no Bluetooth");
-                                    break 'timesLoop;
-                                },
-                            };
+                        // Read an unsigned int 8 from serial port
+                        fn readByte(app: &mut ViyLineApp) -> u8 {
+                            app.serialPortWrite(0x01);
+                            return app.serialPortRead();
                         }
 
-                        // Read measurements
-                        for p in 1..=20 {
-                            info!("Reading 4 bytes for Point #{p}");
-                            let upperV = readByte(self).unwrap() as f64;
-                            let lowerV = readByte(self).unwrap() as f64;
-                            let upperI = readByte(self).unwrap() as f64;
-                            let lowerI = readByte(self).unwrap() as f64;
+                        // Times to measure
+                        let times = vec![5, 15, 30, 50, 100, 150, 250];
 
-                            // (0-100%) * Scaler (out of 5V)
-                            let V = ( (upperV*256.0 + lowerV)/1023.0) * 5.0 * self.Kv;
-                            let I = (((upperI*256.0 + lowerI)/1023.0) * 5.0 - self.offset) * self.Ki;
+                        for t in times {
+                            info!(":: Measure with DeltaT = {t}ms");
 
-                            info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
-                            self.solarPanelCurve.addPoint(V, I);
+                            // Clear and call new measuremen
+                            self.serialPortWrite(t);
+
+                            // Syncronize PIC with Rust (wait for 0xFF else break on error)
+                            while self.serialPortRead() != 0xFF {
+                                std::thread::sleep(std::time::Duration::from_millis(1));
+                            }
+
+                            // Read measurements
+                            for p in 1..=20 {
+                                info!("Reading 4 bytes for Point #{p}");
+                                let upperV = readByte(self) as f64;
+                                let lowerV = readByte(self) as f64;
+                                let upperI = readByte(self) as f64;
+                                let lowerI = readByte(self) as f64;
+
+                                // (0-100%) * Scaler (out of 5V)
+                                let V = ( (upperV*256.0 + lowerV)/1023.0) * 5.0 * self.Kv;
+                                let I = (((upperI*256.0 + lowerI)/1023.0) * 5.0 - self.offset) * self.Ki;
+
+                                info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
+                                self.solarPanelCurve.addPoint(V, I);
+                            }
                         }
-                    }
 
-                    self.calculateRegression();
+                        self.calculateRegression();
+                    }
                 }
 
                 // If we have measurements, show clear, export buttons
@@ -109,16 +100,6 @@ impl eframe::App for ViyLineApp {
                         }
                     }
                 );
-
-                // Bluetooth Connect Button
-                ui.separator();
-                if self.hc06.is_none() {
-                    if ui.button("Connect Bluetooth").clicked() {
-                        block_on(self.findBluetooth());
-                    }
-                } else {
-                    ui.label("Bluetooth Connected");
-                }
             });
 
             // Repository, version
@@ -172,10 +153,6 @@ impl eframe::App for ViyLineApp {
                         .spacing([40.0, 4.0])
                         .striped(true)
                         .show(ui, |ui| {
-                            ui.label("Bluetooth Name:");
-                            ui.add(egui::TextEdit::singleline(&mut self.viylineHardwareBluetoothDeviceName).hint_text("HC-06 Configured Name"));
-                            ui.end_row();
-
                             // Regression related
                             ui.label("Regression steps:");
                             ui.add(egui::DragValue::new(&mut self.regressionSteps).speed(1).clamp_range(1..=100));
