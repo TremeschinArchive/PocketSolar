@@ -116,29 +116,38 @@ impl eframe::App for ViyLineApp {
                 egui::Window::new("Export data window").show(ctx, |ui| {
                     ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
 
-                    // // (re)Build the output CSV
-                    if ui.button("Export CSV").clicked() {
-
-                        // Final export deserves more computation
-                        for _ in 1..20 {self.calculateRegression(); }
-
-                        // Start with keys
-                        self.outputCSV = String::from("index,     V,      I\n");
-
-                        // V open circuit
-                        // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                        let Voc = (self.solarPanelCurve.A/self.solarPanelCurve.B).ln() / self.solarPanelCurve.C;
-                        let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
-
-                        // For every dv
-                        for i in 0..self.exportNOfPoints {
-                            // Calculate next IV point
-                            let V = dV * (i as f64);
-                            let I = self.solarPanelCurve.interpolatedValueAt(V);
-                            self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
-                            if I < 0.0 {break;}
-                        }
+                    // Prepare variables for export; Final export deserves more computation
+                    fn commonExport(app: &mut ViyLineApp) {
+                        for _ in 1..20 {app.calculateRegression(); }
+                        app.outputCSV = String::from("index,     V,      I\n");
                     }
+
+                    ui.horizontal(|ui| {
+                        ui.label("Export: ");
+
+                        if ui.button("Analytic Curve").clicked() {
+                            commonExport(self);
+
+                            // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
+                            let Voc = (self.solarPanelCurve.A/self.solarPanelCurve.B).ln() / self.solarPanelCurve.C;
+                            let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
+
+                            // For every dv, calculate IV point
+                            for i in 0..self.exportNOfPoints {
+                                let V = dV * (i as f64);
+                                let I = self.solarPanelCurve.interpolatedValueAt(V);
+                                self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
+                                if I < 0.0 {break;}
+                            }
+                        }
+
+                        if ui.button("Raw Measurements").clicked() {
+                            commonExport(self);
+                            for (i, point) in self.solarPanelCurve.points.iter().enumerate() {
+                                self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, point.x, point.y));
+                            }
+                        }
+                    });
 
                     // Add text box
                     ui.add(egui::TextEdit::multiline(&mut self.outputCSV).font(egui::TextStyle::Monospace));
@@ -158,11 +167,9 @@ impl eframe::App for ViyLineApp {
                             ui.add(egui::DragValue::new(&mut self.regressionSteps).speed(1).clamp_range(1..=100));
                             ui.end_row();
 
-                            // Checkboxes
                             ui.checkbox(&mut self.recalculateRegressionOnCoefficientChanges, "Clean Regression")
-                                .on_hover_text("Do not use incremental non linear regression, reset coefficients on every calculation");
-                            ui.checkbox(&mut self.plotInteractive, "Interactive Plot")
-                                .on_hover_text("");
+                                .on_hover_text("Reset regression coefficients on every calculation");
+                            if ui.button("Recalculate regression").clicked() { self.calculateRegression(); }
                             ui.end_row();
 
                             if ui.button("Add synthetic points").clicked() {
@@ -172,9 +179,7 @@ impl eframe::App for ViyLineApp {
                                 self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
                             }
 
-                            if ui.button("Recalculate regression").clicked() {
-                                self.calculateRegression();
-                            }
+
 
                             ui.end_row();
                         });
@@ -215,11 +220,6 @@ impl eframe::App for ViyLineApp {
 
             // Main Solar Panel Curves Plot
             Plot::new("solarPanelCurvesPlot")
-                .allow_zoom(self.plotInteractive)
-                .allow_scroll(self.plotInteractive)
-                .allow_boxed_zoom(self.plotInteractive)
-                .allow_drag(self.plotInteractive)
-                // .auto_bounds_x()
                 .show(ui, |plot_ui| {
 
                 // Plot continuous IV curve

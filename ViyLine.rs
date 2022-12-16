@@ -47,8 +47,6 @@ pub struct ViyLineApp {
     // #[serde(skip)]
     solarPanelCurve: Curve::Curve,
 
-    // Hardware configuration
-
     // Current, voltage amplification factor
     Ki: f64,
     Kv: f64,
@@ -58,7 +56,6 @@ pub struct ViyLineApp {
     plotPoints: bool,
     plotIVcurve: bool,
     plotPVcurve: bool,
-    plotInteractive: bool,
 
     // Export Window
     showExportWindow: bool,
@@ -100,7 +97,6 @@ impl ViyLineApp {
             plotPoints: true,
             plotIVcurve: true,
             plotPVcurve: true,
-            plotInteractive: false,
 
             // Export
             exportNOfPoints: 20,
@@ -119,7 +115,7 @@ impl ViyLineApp {
 
 // ----------------------------------------------------------------------------|
 
-async fn trueMain() {
+fn main() {
     Protostar::setupLog();
     let args = Args::parse();
 
@@ -130,9 +126,4 @@ async fn trueMain() {
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
         return app;
     }));
-}
-
-#[tokio::main(flavor="current_thread")]
-async fn main() {
-    trueMain().await;
 }
