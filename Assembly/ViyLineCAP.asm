@@ -157,7 +157,7 @@ singleMeasure:
 
     ; Call measureDelay $rxdata times
     singleMeasureLoop:
-        call        delay1ms
+        call        delay200us
         decf        measureDelays,F
         ifneq       measureDelays,0x0
         goto        singleMeasureLoop
@@ -199,6 +199,7 @@ chargeCapacitor:
 
 dischargeCapacitor:
     movlf       capacitorDischargeHex,PORTB
+    call        delay500ms
     call        delay500ms
     return
 
@@ -282,14 +283,14 @@ cblock
 endc
 
 ; 1 ms delay function
-delay1ms:
-    movlf       0x0C,delayCounter1
-    movlf       0x0D,delayCounter2
-    delay1msLoop:
+delay200us:
+    movlf       0x07,delayCounter1
+    movlf       0x02,delayCounter2
+    delay200usLoop:
         decfsz      delayCounter1,F
-        goto        delay1msLoop
+        goto        delay200usLoop
         decfsz      delayCounter2,F
-        goto        delay1msLoop
+        goto        delay200usLoop
     return
 
 ; 500 ms delay function

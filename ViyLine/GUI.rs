@@ -39,7 +39,7 @@ impl eframe::App for ViyLineApp {
                         }
 
                         // Times to measure
-                        let times = vec![5, 15, 30, 50, 100, 150, 250];
+                        let times = vec![5, 15, 50, 100, 200];
 
                         for t in times {
                             info!(":: Measure with DeltaT = {t}ms");
@@ -53,8 +53,7 @@ impl eframe::App for ViyLineApp {
                             }
 
                             // Read measurements
-                            for p in 1..=20 {
-                                info!("Reading 4 bytes for Point #{p}");
+                            for _ in 1..=20 {
                                 let upperV = readByte(self) as f64;
                                 let lowerV = readByte(self) as f64;
                                 let upperI = readByte(self) as f64;
@@ -62,7 +61,7 @@ impl eframe::App for ViyLineApp {
 
                                 // (0-100%) * Scaler (out of 5V)
                                 let V = ( (upperV*256.0 + lowerV)/1023.0) * 5.0 * self.Kv;
-                                let I = (((upperI*256.0 + lowerI)/1023.0) * 5.0 - self.offset) * self.Ki;
+                                let I = ( (upperI*256.0 + lowerI)/1023.0) * 5.0 * self.Ki;
 
                                 info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
                                 self.solarPanelCurve.addPoint(V, I);
@@ -206,9 +205,6 @@ impl eframe::App for ViyLineApp {
                 ui.add(egui::DragValue::new(&mut self.Ki).speed(0.1).fixed_decimals(3));
                 ui.label("Kv:").on_hover_text("Voltage amplification factor relative to 5 V input on the microcontroller");
                 ui.add(egui::DragValue::new(&mut self.Kv).speed(0.1).fixed_decimals(3));
-
-                ui.label("I Offset:");
-                ui.add(egui::DragValue::new(&mut self.offset).speed(0.1).fixed_decimals(3));
 
                 ui.separator();
                 ui.checkbox(&mut self.plotPoints, "Plot Points");
