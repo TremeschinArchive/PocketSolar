@@ -1,16 +1,24 @@
 // | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
-// #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(non_snake_case)]
 #![allow(unused_must_use)]
 use Protostar::*;
+
+#[derive(Parser, Debug)]
+#[command(author=Protostar::Const::AUTHOR, about=Protostar::Const::VIYLINE, version)]
+pub struct Args {
+    // Reset settings on boot
+    #[arg(short, long, help = "Reset to default settings")]
+    defaultSettings: bool,
+}
+
+// ----------------------------------------------------------------------------|
 
 use egui::plot::Line;
 use egui::plot::Plot;
 use egui::plot::PlotPoints;
 use egui::plot::Points;
 use egui::Color32;
-
-// ----------------------------------------------------------------------------|
 
 const BAUDRATE: u32 = 9600;
 
@@ -22,22 +30,6 @@ mod Serial;
 
 #[path = "ViyLine/GUI.rs"]
 mod GUI;
-
-// ----------------------------------------------------------------------------|
-
-const ABOUT: &str = "
-ViyLine, a Solar Panel IV Curve Tracker
-
-(c) Tremeschin, AGPLv3-only License.";
-
-// CLI Arguments
-#[derive(Parser, Debug)]
-#[command(author="Tremeschin", version, about=ABOUT, long_about=None)]
-pub struct Args {
-    // Reset settings on boot
-    #[arg(short, long, help = "Reset to default settings")]
-    defaultSettings: bool,
-}
 
 // ----------------------------------------------------------------------------|
 
@@ -100,7 +92,7 @@ impl ViyLineApp {
             exportNOfPoints: 20,
 
             // Serial
-            portName: String::from("None"),
+            portName: str!("None"),
 
             // Regression
             regressionSteps: 100,

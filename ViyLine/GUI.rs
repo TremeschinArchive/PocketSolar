@@ -90,7 +90,7 @@ impl eframe::App for ViyLineApp {
                     .selected_text(format!("{}", &mut self.portName))
                     .show_ui(ui, |ui| {
                         let ports = serialport::available_ports();
-                        ui.selectable_value(&mut self.portName, String::from("None"), String::from("None"));
+                        ui.selectable_value(&mut self.portName, str!("None"), str!("None"));
                         if ports.is_ok() {
                             for port in ports.unwrap().iter() {
                                 let portName = port.port_name.clone();
@@ -118,7 +118,7 @@ impl eframe::App for ViyLineApp {
                     // Prepare variables for export; Final export deserves more computation
                     fn commonExport(app: &mut ViyLineApp) {
                         for _ in 1..20 {app.calculateRegression(); }
-                        app.outputCSV = String::from("index,     V,      I\n");
+                        app.outputCSV = str!("index,     V,      I\n");
                     }
 
                     ui.horizontal(|ui| {

@@ -12,10 +12,11 @@
 
 # -------------------------------------------------------|
 
-# Imports
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 from numpy import *
+# Imports
+from plotly.subplots import make_subplots
+
 
 class Simulation:
     VoltageSource = 0
