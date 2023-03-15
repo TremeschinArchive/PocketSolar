@@ -5,7 +5,7 @@
 use Protostar::*;
 
 #[derive(Parser, Debug)]
-#[command(author=Protostar::Const::AUTHOR, about=Protostar::Const::About::VIYLINE, version)]
+#[command(author=Protostar::Constants::AUTHOR, about=Protostar::Constants::About::VIYLINE, version)]
 pub struct Args {
     // Reset settings on boot
     #[arg(short, long, help = "Reset to default settings")]
