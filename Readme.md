@@ -9,6 +9,8 @@
 
 </div>
 
+This is the old deprecated Assembly branch using the microcontroller.
+
 <br>
 
 <sub><b>NOTE:</b> This is a VERY DIY project, you will be building the physical circuit itself, we provide you the schematic and list of components.</sub>
