@@ -1,38 +1,41 @@
-// | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
 use crate::*;
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(Default, Clone)]
-pub struct Point {
-    pub x: f64,
-    pub y: f64,
+BrokenStruct! {
+    pub struct IVPoint {
+        pub v: f64,
+        pub i: f64,
+    }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(Default, Clone)]
-pub struct Curve {
-    pub points: Vec<Point>,
+BrokenStruct! {
+    pub struct IVCurve {
+        pub points: Vec<IVPoint>,
 
-    // Curve parameters
-    pub C: f64,
-    pub A: f64,
-    pub B: f64
+        // IV Curve parameters
+        pub C: f64,
+        pub A: f64,
+        pub B: f64,
+
+        // MPP
+        pub MPPVoltage: f64,
+    }
 }
 
 impl ViyLineApp {
 
     // Short hand for extra functionality
-    pub fn calculateRegression(&mut self) {
+    pub fn updateSolarPanelCurve(&mut self) {
         if self.recalculateRegressionOnCoefficientChanges {
             self.solarPanelCurve.clearRegression();
         }
 
         // Calculate regression after measurement
         self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
+        self.solarPanelCurve.calculateMPP();
     }
 }
 
-impl Curve {
+impl IVCurve {
 
     // Returns the coefficients
     pub fn calculateCoefficients(&mut self, steps: i64) {
@@ -52,8 +55,8 @@ impl Curve {
                 self.A = maxY + self.B;
 
                 // X, Y points for linear regression
-                let x = Vec::from_iter(self.points.iter().map( |point|  point.x                ));
-                let y = Vec::from_iter(self.points.iter().map( |point| (self.A*(1.0) - point.y).ln() ));
+                let x = Vec::from_iter(self.points.iter().map( |point|  point.v                ));
+                let y = Vec::from_iter(self.points.iter().map( |point| (self.A*(1.0) - point.i).ln() ));
 
                 // Linear regression
                 let sumX:   f64 = x.iter().sum();
@@ -74,15 +77,30 @@ impl Curve {
         }
     }
 
-    // Calculate a generic point X
-    pub fn interpolatedValueAt(&self, x: f64) -> f64 {
-        return self.A - self.B*exp(self.C*x);
+    // Calculate the maximum power point by matching when the derivative of the power curve is 0
+    pub fn calculateMPP(&mut self) {
+        self.MPPVoltage = 0.0;
+        let delta = 0.01;
+
+        while self.powerAtVoltage(self.MPPVoltage + delta) > self.powerAtVoltage(self.MPPVoltage) {
+            self.MPPVoltage += delta;
+        }
+    }
+
+    // Calculate the power at a given voltage
+    pub fn powerAtVoltage(&self, voltage: f64) -> f64 {
+        return voltage*self.currentAtVoltage(voltage);
+    }
+
+    // Calculate the current at a given voltage
+    pub fn currentAtVoltage(&self, voltage: f64) -> f64 {
+        return self.A - self.B*exp(self.C*voltage);
     }
 
     // Minimum and maximum value of the curve
     fn minMaxY(&self) -> Option<(f64, f64)> {
         if self.points.len() == 0 {return None;}
-        let mut yValues = Vec::from_iter(self.points.iter().map(|point| point.y));
+        let mut yValues = Vec::from_iter(self.points.iter().map(|point| point.i));
         yValues.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let minY = yValues.first().unwrap();
         let maxY = yValues.last().unwrap();
@@ -102,6 +120,6 @@ impl Curve {
     }
 
     pub fn addPoint(&mut self, x: f64, y: f64) {
-        self.points.push(Point { x: x, y: y });
+        self.points.push(IVPoint { v: x, i: y });
     }
 }

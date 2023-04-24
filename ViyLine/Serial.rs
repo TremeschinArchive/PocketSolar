@@ -1,4 +1,3 @@
-// | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
 use crate::*;
 
 // Serial port

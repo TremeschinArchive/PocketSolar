@@ -1,4 +1,3 @@
-// | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
 use crate::*;
 
 impl eframe::App for ViyLineApp {
@@ -68,7 +67,7 @@ impl eframe::App for ViyLineApp {
                             }
                         }
 
-                        self.calculateRegression();
+                        self.updateSolarPanelCurve();
                     }
                 }
 
@@ -117,8 +116,8 @@ impl eframe::App for ViyLineApp {
 
                     // Prepare variables for export; Final export deserves more computation
                     fn commonExport(app: &mut ViyLineApp) {
-                        for _ in 1..20 {app.calculateRegression(); }
-                        app.outputCSV = str!("index,     V,      I\n");
+                        for _ in 1..3 {app.updateSolarPanelCurve()}
+                        app.outputCSV = str!("  i,     V,      I,        P\n");
                     }
 
                     ui.horizontal(|ui| {
@@ -134,8 +133,8 @@ impl eframe::App for ViyLineApp {
                             // For every dv, calculate IV point
                             for i in 0..self.exportNOfPoints {
                                 let V = dV * (i as f64);
-                                let I = self.solarPanelCurve.interpolatedValueAt(V);
-                                self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, V, I.abs()));
+                                let I = self.solarPanelCurve.currentAtVoltage(V);
+                                self.outputCSV.push_str(&format!("{:>3},{:>6.2},{:>7.4},{:>9.4}\n", i+1, V, I.abs(), V*I.abs()));
                                 if I < 0.0 {break;}
                             }
                         }
@@ -143,7 +142,7 @@ impl eframe::App for ViyLineApp {
                         if ui.button("Raw Measurements").clicked() {
                             commonExport(self);
                             for (i, point) in self.solarPanelCurve.points.iter().enumerate() {
-                                self.outputCSV.push_str(&format!("{:>5},{:>6.2},{:>7.4}\n", i, point.x, point.y));
+                                self.outputCSV.push_str(&format!("{:>3},{:>6.2},{:>7.4},{:>9.4}\n", i+1, point.v, point.i, point.v*point.i));
                             }
                         }
                     });
@@ -168,7 +167,7 @@ impl eframe::App for ViyLineApp {
 
                             ui.checkbox(&mut self.recalculateRegressionOnCoefficientChanges, "Clean Regression")
                                 .on_hover_text("Reset regression coefficients on every calculation");
-                            if ui.button("Recalculate regression").clicked() { self.calculateRegression(); }
+                            if ui.button("Recalculate regression").clicked() { self.updateSolarPanelCurve(); }
                             ui.end_row();
 
                             if ui.button("Add synthetic points").clicked() {
@@ -192,7 +191,11 @@ impl eframe::App for ViyLineApp {
             // Info and plot options
             ui.horizontal(|ui| {
                 egui::warn_if_debug_build(ui);
-                ui.label(format!("IV(v) = {:.2} - ({:.3e})exp({:.4}v)", self.solarPanelCurve.A, self.solarPanelCurve.B, self.solarPanelCurve.C));
+                ui.label(format!("IV(v) = {:.4} - ({:.4e})exp({:.4}v)", self.solarPanelCurve.A, self.solarPanelCurve.B, self.solarPanelCurve.C));
+
+                // Maximum power point
+                ui.separator();
+                ui.label(format!("MPP @ {:.2} V", self.solarPanelCurve.MPPVoltage));
 
                 ui.separator();
                 ui.label("Plot curve:");
@@ -224,7 +227,7 @@ impl eframe::App for ViyLineApp {
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
-                                return curve.interpolatedValueAt(x);
+                                return curve.currentAtVoltage(x);
                             }, .., 512,
                         ))
                         .width(5.0)
@@ -237,7 +240,7 @@ impl eframe::App for ViyLineApp {
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
-                                return x*(7.0/260.0)*curve.interpolatedValueAt(x);
+                                return x*(7.0/260.0)*curve.currentAtVoltage(x);
                             }, .., 512,
                         ))
                         .width(5.0)
@@ -247,9 +250,9 @@ impl eframe::App for ViyLineApp {
                 // Plot points on graph
                 if self.plotPoints {
                     for point in &self.solarPanelCurve.points {
-                        if point.y < 0.0 { continue; }
+                        if point.i < 0.0 { continue; }
                         plot_ui.points(
-                            Points::new([point.x, point.y])
+                            Points::new([point.v, point.i])
                                 .radius(2.0)
                                 .color(Color32::from_rgb(0, 255, 0)),
                         );

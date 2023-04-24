@@ -1,11 +1,10 @@
-// | (c) 2022 Tremeschin, MIT License | ViyLine Project | //
 #![cfg_attr(not(debug_assertions), windows_subsystem="windows")]
 #![allow(non_snake_case)]
 #![allow(unused_must_use)]
-use Protostar::*;
+use Broken::*;
 
 #[derive(Parser, Debug)]
-#[command(author=Protostar::Constants::AUTHOR, about=Protostar::Constants::About::VIYLINE, version)]
+#[command(author=Broken::Constants::AUTHOR, about=Broken::Constants::About::VIYLINE, version)]
 pub struct Args {
     // Reset settings on boot
     #[arg(short, long, help = "Reset to default settings")]
@@ -22,8 +21,8 @@ use egui::Color32;
 
 const BAUDRATE: u32 = 9600;
 
-#[path = "ViyLine/Curve.rs"]
-mod Curve;
+#[path = "ViyLine/IVCurve.rs"]
+mod IVCurve;
 
 #[path = "ViyLine/Serial.rs"]
 mod Serial;
@@ -37,7 +36,7 @@ mod GUI;
 #[derive(Default)]
 pub struct ViyLineApp {
     // #[serde(skip)]
-    solarPanelCurve: Curve::Curve,
+    solarPanelCurve: IVCurve::IVCurve,
 
     // Current, voltage amplification factor
     Ki: f64,
@@ -106,7 +105,7 @@ impl ViyLineApp {
 // ----------------------------------------------------------------------------|
 
 fn main() {
-    Protostar::setupLog();
+    Broken::setupLog();
     let args = Args::parse();
 
     // Compile NATIVELY
