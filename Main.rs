@@ -52,7 +52,7 @@ BrokenStruct! {
         // Serial
         #[serde(skip)]
         #[derivative(Debug="ignore")]
-        serialPort: Option<Box<dyn serialport::SerialPort>>,
+        serialPort: Option<Arc<dyn serialport::SerialPort>>,
         portName: String,
 
         // Other configurations

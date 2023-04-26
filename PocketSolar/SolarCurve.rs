@@ -1,7 +1,6 @@
 use crate::*;
 
 BrokenStruct! {
-    #[derive(Clone)]
     pub struct IVPoint {
         pub v: f64,
         pub i: f64,
@@ -9,7 +8,6 @@ BrokenStruct! {
 }
 
 BrokenStruct! {
-    #[derive(Clone)]
     pub struct SolarCurve {
         pub points: Vec<IVPoint>,
 
