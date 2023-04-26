@@ -43,7 +43,6 @@ BrokenStruct! {
         plotPVcurve: bool,
 
         // Export Window
-        #[default(false)]
         showExportWindow: bool,
         #[default(20)]
         exportNOfPoints: i64,
@@ -53,6 +52,7 @@ BrokenStruct! {
         #[serde(skip)]
         #[derivative(Debug="ignore")]
         serialPort: Option<Arc<dyn serialport::SerialPort>>,
+        #[default(str!("None"))]
         portName: String,
 
         // Other configurations
@@ -61,7 +61,6 @@ BrokenStruct! {
         // Regression
         #[default(100)]
         regressionSteps: i64,
-        #[default(false)]
         recalculateRegressionOnCoefficientChanges: bool,
     }
 }
@@ -70,36 +69,13 @@ impl PocketSolarApp {
     pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> PocketSolarApp {
 
         // Restore previous settings if any
-        if let Some(storage) = cc.storage {
-            if !args.defaultSettings {
+        if !args.defaultSettings {
+            if let Some(storage) = cc.storage {
                 return eframe::get_value(storage, "PocketSolar").unwrap_or_default();
             }
         }
 
-        // Default configuration
-        return PocketSolarApp {
-
-            // Current, voltage amplification factor
-            Ki: 1.0,
-            Kv: 10.0,
-
-            // Plot options
-            plotPoints: true,
-            plotSolarCurve: true,
-            plotPVcurve: true,
-
-            // Export
-            exportNOfPoints: 20,
-
-            // Serial
-            portName: str!("None"),
-
-            // Regression
-            regressionSteps: 100,
-            recalculateRegressionOnCoefficientChanges: false,
-
-            ..PocketSolarApp::default()
-        };
+        PocketSolarApp::default()
     }
 }
 
