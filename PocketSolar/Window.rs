@@ -227,7 +227,7 @@ impl eframe::App for PocketSolarApp {
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
-                                return curve.currentAtVoltage(x);
+                                curve.currentAtVoltage(x)
                             }, .., 512,
                         ))
                         .width(5.0)
@@ -240,7 +240,7 @@ impl eframe::App for PocketSolarApp {
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
-                                return x*(7.0/260.0)*curve.currentAtVoltage(x);
+                                x*(7.0/260.0)*curve.currentAtVoltage(x)
                             }, .., 512,
                         ))
                         .width(5.0)

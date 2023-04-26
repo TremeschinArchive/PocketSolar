@@ -24,37 +24,46 @@ const BAUDRATE: u32 = 9600;
 
 // ----------------------------------------------------------------------------|
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(Default)]
-pub struct PocketSolarApp {
-    // #[serde(skip)]
-    solarPanelCurve: SolarCurve::SolarCurve,
+BrokenStruct! {
+    pub struct PocketSolarApp {
+        solarPanelCurve: SolarCurve::SolarCurve,
 
-    // Current, voltage amplification factor
-    Ki: f64,
-    Kv: f64,
+        // Current, voltage amplification factor
+        #[default(1.0)]
+        Ki: f64,
+        #[default(1.0)]
+        Kv: f64,
 
-    // Plot options
-    plotPoints: bool,
-    plotSolarCurve: bool,
-    plotPVcurve: bool,
+        // Plot options
+        #[default(true)]
+        plotPoints: bool,
+        #[default(true)]
+        plotSolarCurve: bool,
+        #[default(true)]
+        plotPVcurve: bool,
 
-    // Export Window
-    showExportWindow: bool,
-    exportNOfPoints: i64,
-    outputCSV: String,
+        // Export Window
+        #[default(false)]
+        showExportWindow: bool,
+        #[default(20)]
+        exportNOfPoints: i64,
+        outputCSV: String,
 
-    // Serial
-    #[serde(skip)]
-    serialPort: Option<Box<dyn serialport::SerialPort>>,
-    portName: String,
+        // Serial
+        #[serde(skip)]
+        #[derivative(Debug="ignore")]
+        serialPort: Option<Box<dyn serialport::SerialPort>>,
+        portName: String,
 
-    // Other configurations
-    showConfigurationWindow: bool,
+        // Other configurations
+        showConfigurationWindow: bool,
 
-    // Regression
-    regressionSteps: i64,
-    recalculateRegressionOnCoefficientChanges: bool,
+        // Regression
+        #[default(100)]
+        regressionSteps: i64,
+        #[default(false)]
+        recalculateRegressionOnCoefficientChanges: bool,
+    }
 }
 
 impl PocketSolarApp {
