@@ -1,4 +1,4 @@
-// Arduino UNO code for the ViyLine project
+// Arduino UNO code for the PocketSolar project
 
 #define PWM_PIN 13
 #define PWM_FREQUENCY 100.0

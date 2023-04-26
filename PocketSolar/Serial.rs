@@ -1,7 +1,7 @@
 use crate::*;
 
 // Serial port
-impl ViyLineApp {
+impl PocketSolarApp {
 
     // Open the COM serial port
     pub fn openSerialPort(&mut self, portName: &String) {

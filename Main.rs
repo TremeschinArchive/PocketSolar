@@ -4,7 +4,7 @@
 use Broken::*;
 
 #[derive(Parser, Debug)]
-#[command(author=Broken::Constants::AUTHOR, about=Broken::Constants::About::VIYLINE, version)]
+#[command(author=Broken::Constants::AUTHOR, about=Broken::Constants::About::PocketSolar, version)]
 pub struct Args {
     // Reset settings on boot
     #[arg(short, long, help = "Reset to default settings")]
@@ -21,20 +21,20 @@ use egui::Color32;
 
 const BAUDRATE: u32 = 9600;
 
-#[path = "ViyLine/IVCurve.rs"]
+#[path = "PocketSolar/IVCurve.rs"]
 mod IVCurve;
 
-#[path = "ViyLine/Serial.rs"]
+#[path = "PocketSolar/Serial.rs"]
 mod Serial;
 
-#[path = "ViyLine/GUI.rs"]
+#[path = "PocketSolar/GUI.rs"]
 mod GUI;
 
 // ----------------------------------------------------------------------------|
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[derive(Default)]
-pub struct ViyLineApp {
+pub struct PocketSolarApp {
     // #[serde(skip)]
     solarPanelCurve: IVCurve::IVCurve,
 
@@ -65,18 +65,18 @@ pub struct ViyLineApp {
     recalculateRegressionOnCoefficientChanges: bool,
 }
 
-impl ViyLineApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> ViyLineApp {
+impl PocketSolarApp {
+    pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> PocketSolarApp {
 
         // Restore previous settings if any
         if let Some(storage) = cc.storage {
             if !args.defaultSettings {
-                return eframe::get_value(storage, "ViyLine").unwrap_or_default();
+                return eframe::get_value(storage, "PocketSolar").unwrap_or_default();
             }
         }
 
         // Default configuration
-        return ViyLineApp {
+        return PocketSolarApp {
 
             // Current, voltage amplification factor
             Ki: 1.0,
@@ -97,7 +97,7 @@ impl ViyLineApp {
             regressionSteps: 100,
             recalculateRegressionOnCoefficientChanges: false,
 
-            ..ViyLineApp::default()
+            ..PocketSolarApp::default()
         };
     }
 }
@@ -110,8 +110,8 @@ fn main() {
 
     // Compile NATIVELY
     #[cfg(not(target_arch = "wasm32"))]
-    eframe::run_native("ViyLine", eframe::NativeOptions::default(), Box::new(|cc| {
-        let app = Box::new(ViyLineApp::new(cc, args));
+    eframe::run_native("PocketSolar", eframe::NativeOptions::default(), Box::new(|cc| {
+        let app = Box::new(PocketSolarApp::new(cc, args));
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
         return app;
     }));

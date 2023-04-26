@@ -1,9 +1,9 @@
 👆【☰】Table of Contents
 
 <div align="center">
-  <img src="https://github.com/BrokenSource/ViyLine/raw/Master/ViyLine/icon.png" onerror="this.src='../ViyLine/icon.png'" width="256"/>
+  <img src="https://github.com/BrokenSource/PocketSolar/raw/Master/PocketSolar/icon.png" onerror="this.src='../PocketSolar/icon.png'" width="256"/>
 
-    ViyLine - Vee Aye Line
+    PocketSolar
 
   Solar panel IV curve tracker using Arduino and a front end GUI in Rust.
 
@@ -34,10 +34,10 @@ The points are sent back to the Rust code using either Serial or Bluetooth commu
 
 
 # ● Running from Source Code
-See the [BrokenSource](https://github.com/Tremeschin/BrokenSource) for setting up the development environment.
+See the [BrokenSource](https://github.com/BrokenSource/BrokenSource) for setting up the development environment.
 
-- Compile and upload the `ViyLine.ino` Arduino code to an Arduino UNO board
-- Run: `broken viyline`
+- Compile and upload the `PocketSolar.ino` Arduino code to an Arduino UNO board
+- Run: `broken PocketSolar`
 
 
 # ● Building the Circuit
@@ -45,18 +45,17 @@ The circuit schematic will be provided at some point in the close future.
 
 
 # ● License
-
-MIT License. Schematics under CC-BY-4.0. See the [BrokenSource](https://github.com/Tremeschin/BrokenSource) for more details.
+MIT License. Schematics under CC-BY-4.0.
 
 
 # ● Citing
 
 BibTeX entry for LaTeX:
 ```bibtex
-@electronic{viyline,
-  title    = {ViyLine: Traçador de Curva IV do Painel Solar},
+@electronic{PocketSolar,
+  title    = {PocketSolar: Traçador de Curva IV do Painel Solar},
   keywords = {Rust, Arduino, Solar Panel, IV Curve},
-  url      = {https://github.com/BrokenSource/ViyLine},
+  url      = {https://github.com/BrokenSource/PocketSolar},
   author   = {Tremeschin; et al.},
   year     = {2022},
   abstract = {

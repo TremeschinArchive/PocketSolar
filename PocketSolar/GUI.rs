@@ -1,10 +1,10 @@
 use crate::*;
 
-impl eframe::App for ViyLineApp {
+impl eframe::App for PocketSolarApp {
 
     // Save state on window shut down
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, "ViyLine", self);
+        eframe::set_value(storage, "PocketSolar", self);
     }
 
     fn auto_save_interval(&self) -> std::time::Duration {
@@ -17,7 +17,7 @@ impl eframe::App for ViyLineApp {
         // Top bar
         egui::TopBottomPanel::top("topPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.heading("ViyLine");
+                ui.heading("PocketSolar");
                 ui.separator();
 
                 // Configurations window
@@ -32,7 +32,7 @@ impl eframe::App for ViyLineApp {
                     if self.serialPort.is_some() {
 
                         // Read an unsigned int 8 from serial port
-                        fn readByte(app: &mut ViyLineApp) -> u8 {
+                        fn readByte(app: &mut PocketSolarApp) -> u8 {
                             app.serialPortWrite(0x01);
                             return app.serialPortRead();
                         }
@@ -104,7 +104,7 @@ impl eframe::App for ViyLineApp {
             ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
                 ui.horizontal(|ui| {
                     ui.label(format!("[v{}]", env!("CARGO_PKG_VERSION")));
-                    ui.hyperlink_to("GitHub", "https://github.com/BrokenSource/ViyLine");
+                    ui.hyperlink_to("GitHub", "https://github.com/BrokenSource/PocketSolar");
                     egui::global_dark_light_mode_switch(ui);
                 });
             });
@@ -115,7 +115,7 @@ impl eframe::App for ViyLineApp {
                     ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
 
                     // Prepare variables for export; Final export deserves more computation
-                    fn commonExport(app: &mut ViyLineApp) {
+                    fn commonExport(app: &mut PocketSolarApp) {
                         for _ in 1..3 {app.updateSolarPanelCurve()}
                         app.outputCSV = str!("  i,     V,      I,        P\n");
                     }

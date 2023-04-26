@@ -21,7 +21,7 @@ BrokenStruct! {
     }
 }
 
-impl ViyLineApp {
+impl PocketSolarApp {
 
     // Short hand for extra functionality
     pub fn updateSolarPanelCurve(&mut self) {
