@@ -3,10 +3,11 @@
 #![allow(unused_must_use)]
 use Broken::*;
 
+import!{PocketSolar}
+
 #[derive(Parser, Debug)]
 #[command(author=Broken::Constants::AUTHOR, about=Broken::Constants::About::PocketSolar, version)]
 pub struct Args {
-    // Reset settings on boot
     #[arg(short, long, help = "Reset to default settings")]
     defaultSettings: bool,
 }
@@ -20,15 +21,6 @@ use egui::plot::Points;
 use egui::Color32;
 
 const BAUDRATE: u32 = 9600;
-
-#[path = "PocketSolar/IVCurve.rs"]
-mod IVCurve;
-
-#[path = "PocketSolar/Serial.rs"]
-mod Serial;
-
-#[path = "PocketSolar/GUI.rs"]
-mod GUI;
 
 // ----------------------------------------------------------------------------|
 
@@ -108,8 +100,6 @@ fn main() {
     Broken::setupLog();
     let args = Args::parse();
 
-    // Compile NATIVELY
-    #[cfg(not(target_arch = "wasm32"))]
     eframe::run_native("PocketSolar", eframe::NativeOptions::default(), Box::new(|cc| {
         let app = Box::new(PocketSolarApp::new(cc, args));
         cc.egui_ctx.set_visuals(egui::Visuals::dark());
