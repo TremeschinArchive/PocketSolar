@@ -1,3 +1,3 @@
-pub mod GUI;
-pub mod IVCurve;
 pub mod Serial;
+pub mod SolarCurve;
+pub mod Window;

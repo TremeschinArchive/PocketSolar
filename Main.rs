@@ -28,7 +28,7 @@ const BAUDRATE: u32 = 9600;
 #[derive(Default)]
 pub struct PocketSolarApp {
     // #[serde(skip)]
-    solarPanelCurve: IVCurve::IVCurve,
+    solarPanelCurve: SolarCurve::SolarCurve,
 
     // Current, voltage amplification factor
     Ki: f64,
@@ -36,7 +36,7 @@ pub struct PocketSolarApp {
 
     // Plot options
     plotPoints: bool,
-    plotIVcurve: bool,
+    plotSolarCurve: bool,
     plotPVcurve: bool,
 
     // Export Window
@@ -76,7 +76,7 @@ impl PocketSolarApp {
 
             // Plot options
             plotPoints: true,
-            plotIVcurve: true,
+            plotSolarCurve: true,
             plotPVcurve: true,
 
             // Export

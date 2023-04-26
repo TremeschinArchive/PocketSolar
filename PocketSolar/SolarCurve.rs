@@ -8,7 +8,7 @@ BrokenStruct! {
 }
 
 BrokenStruct! {
-    pub struct IVCurve {
+    pub struct SolarCurve {
         pub points: Vec<IVPoint>,
 
         // IV Curve parameters
@@ -35,7 +35,7 @@ impl PocketSolarApp {
     }
 }
 
-impl IVCurve {
+impl SolarCurve {
 
     // Returns the coefficients
     pub fn calculateCoefficients(&mut self, steps: i64) {

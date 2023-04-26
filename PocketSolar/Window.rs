@@ -199,7 +199,7 @@ impl eframe::App for PocketSolarApp {
 
                 ui.separator();
                 ui.label("Plot curve:");
-                ui.checkbox(&mut self.plotIVcurve, "IV");
+                ui.checkbox(&mut self.plotSolarCurve, "IV");
                 ui.checkbox(&mut self.plotPVcurve, "PV");
 
                 // Amplification factors
@@ -222,7 +222,7 @@ impl eframe::App for PocketSolarApp {
                 .show(ui, |plot_ui| {
 
                 // Plot continuous IV curve
-                if self.plotIVcurve {
+                if self.plotSolarCurve {
                     let curve = self.solarPanelCurve.clone();
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
