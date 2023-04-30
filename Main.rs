@@ -5,6 +5,12 @@ use Broken::*;
 
 import!{PocketSolar}
 
+use egui::plot::Line;
+use egui::plot::Plot;
+use egui::plot::PlotPoints;
+use egui::plot::Points;
+use egui::Color32;
+
 #[derive(Parser, Debug)]
 #[command(author=Broken::Constants::AUTHOR, about=Broken::Constants::About::PocketSolar, version)]
 pub struct Args {
@@ -12,31 +18,16 @@ pub struct Args {
     defaultSettings: bool,
 }
 
-// ----------------------------------------------------------------------------|
-
-use egui::plot::Line;
-use egui::plot::Plot;
-use egui::plot::PlotPoints;
-use egui::plot::Points;
-use egui::Color32;
-
-const BAUDRATE: u32 = 9600;
-
-// ----------------------------------------------------------------------------|
-
 BrokenStruct! {
     pub struct PocketSolarApp {
-        solarPanelCurve: SolarCurve::SolarCurve,
-
-        // Current, voltage amplification factor
-        #[default(1.0)]
-        Ki: f64,
-        #[default(1.0)]
-        Kv: f64,
+        #[serde(skip)]
+        solarPanelCurve: Arc<RwLock<SolarCurve::SolarCurve>>,
 
         // Plot options
         #[default(true)]
         plotPoints: bool,
+        #[default(true)]
+        plotDuty: bool,
         #[default(true)]
         plotSolarCurve: bool,
         #[default(true)]
@@ -48,20 +39,8 @@ BrokenStruct! {
         exportNOfPoints: i64,
         outputCSV: String,
 
-        // Serial
-        #[serde(skip)]
-        #[derivative(Debug="ignore")]
-        serialPort: Option<Arc<dyn serialport::SerialPort>>,
-        #[default(str!("None"))]
-        portName: String,
-
         // Other configurations
         showConfigurationWindow: bool,
-
-        // Regression
-        #[default(100)]
-        regressionSteps: i64,
-        recalculateRegressionOnCoefficientChanges: bool,
     }
 }
 
@@ -69,17 +48,22 @@ impl PocketSolarApp {
     pub fn new(cc: &eframe::CreationContext<'_>, args: Args) -> PocketSolarApp {
 
         // Restore previous settings if any
-        if !args.defaultSettings {
-            if let Some(storage) = cc.storage {
-                return eframe::get_value(storage, "PocketSolar").unwrap_or_default();
+        let mut app = {
+            if !args.defaultSettings {
+                if let Some(storage) = cc.storage {
+                    eframe::get_value(storage, "PocketSolar").unwrap_or_default()
+                }
             }
-        }
 
-        PocketSolarApp::default()
+            PocketSolarApp::default()
+        };
+
+        // Spin the SolarCurve thread
+        app.solarPanelCurve = SolarCurve::SolarCurve::freewheelDefault();
+        return app;
     }
 }
 
-// ----------------------------------------------------------------------------|
 
 fn main() {
     Broken::setupLog();

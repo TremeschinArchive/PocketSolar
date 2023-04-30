@@ -13,91 +13,36 @@ impl eframe::App for PocketSolarApp {
 
     // Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let solarPanelCurve = &mut self.solarPanelCurve.write().unwrap();
 
         // Top bar
         egui::TopBottomPanel::top("topPanel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("PocketSolar");
-                ui.separator();
-
-                // Configurations window
-                if ui.button("🔧").clicked() {
-                    self.showConfigurationWindow = !self.showConfigurationWindow;
-                }
-
-                // Buttons / Actions
-                if ui.button("Measure").clicked() {
-                    self.openSerialPort(&self.portName.clone());
-
-                    if self.serialPort.is_some() {
-
-                        // Read an unsigned int 8 from serial port
-                        fn readByte(app: &mut PocketSolarApp) -> u8 {
-                            app.serialPortWrite(0x01);
-                            return app.serialPortRead();
-                        }
-
-                        // Times to measure
-                        let times = vec![5, 15, 50, 100, 200];
-
-                        for t in times {
-                            info!(":: Measure with DeltaT = {t}ms");
-
-                            // Clear and call new measuremen
-                            self.serialPortWrite(t);
-
-                            // Syncronize PIC with Rust (wait for 0xFF else break on error)
-                            while self.serialPortRead() != 0xFF {
-                                std::thread::sleep(std::time::Duration::from_millis(1));
-                            }
-
-                            // Read measurements
-                            for _ in 1..=20 {
-                                let upperV = readByte(self) as f64;
-                                let lowerV = readByte(self) as f64;
-                                let upperI = readByte(self) as f64;
-                                let lowerI = readByte(self) as f64;
-
-                                // (0-100%) * Scaler (out of 5V)
-                                let V = ( (upperV*256.0 + lowerV)/1023.0) * 5.0 * self.Kv;
-                                let I = ( (upperI*256.0 + lowerI)/1023.0) * 5.0 * self.Ki;
-
-                                info!("  [LW V: {upperV} {lowerV}] [LW I: {upperI} {lowerI}] [V {V:.4}] [I {I:.4}]");
-                                self.solarPanelCurve.addPoint(V, I);
-                            }
-                        }
-
-                        self.updateSolarPanelCurve();
-                    }
-                }
-
-                // If we have measurements, show clear, export buttons
-                if self.solarPanelCurve.points.len() > 0 {
-                    if ui.button("Clear").clicked() {
-                        self.solarPanelCurve.clear();
-                    }
-
-                    if ui.button("Export").clicked() {
-                        self.showExportWindow = !self.showExportWindow;
-                    }
-                }
 
                 // Serial port Combo Box connection
                 ui.separator();
                 ui.label("Serial Port");
                 egui::ComboBox::from_label("")
-                    .selected_text(format!("{}", &mut self.portName))
+                    .selected_text(format!("{}", &mut solarPanelCurve.portName))
                     .show_ui(ui, |ui| {
                         let ports = serialport::available_ports();
-                        ui.selectable_value(&mut self.portName, str!("None"), str!("None"));
+                        ui.selectable_value(&mut solarPanelCurve.portName, str!("None"), str!("None"));
                         if ports.is_ok() {
                             for port in ports.unwrap().iter() {
                                 let portName = port.port_name.clone();
-                                ui.selectable_value(&mut self.portName, portName.clone(), portName);
+                                ui.selectable_value(&mut solarPanelCurve.portName, portName.clone(), portName);
                             }
                         }
                     }
-                );
+                ).response.on_hover_text("Select the serial port Arduino is connected to");
+
+                // If we have measurements, show clear, export buttons
+                if solarPanelCurve.points.len() > 0 {
+                    if ui.button("Export").clicked() {
+                        self.showExportWindow = !self.showExportWindow;
+                    }
+                }
             });
 
             // Repository, version
@@ -114,73 +59,38 @@ impl eframe::App for PocketSolarApp {
                 egui::Window::new("Export data window").show(ctx, |ui| {
                     ui.add(egui::Slider::new(&mut self.exportNOfPoints, 2..=100).text("Number of Points"));
 
-                    // Prepare variables for export; Final export deserves more computation
-                    fn commonExport(app: &mut PocketSolarApp) {
-                        for _ in 1..3 {app.updateSolarPanelCurve()}
-                        app.outputCSV = str!("  i,     V,      I,        P\n");
-                    }
-
                     ui.horizontal(|ui| {
                         ui.label("Export: ");
+                        let analytic = ui.button("Analytic Curve").clicked();
+                        let raw      = ui.button("Raw Measurements").clicked();
 
-                        if ui.button("Analytic Curve").clicked() {
-                            commonExport(self);
+                        if raw || analytic {
+                            self.outputCSV = str!("  i,     V,      I,        P\n");
 
-                            // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
-                            let Voc = (self.solarPanelCurve.A/self.solarPanelCurve.B).ln() / self.solarPanelCurve.C;
-                            let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
+                            if analytic {
+                                // [A - Be^kx = 0] => [Be^kx = A] => [x = ln(A/B)/k]
+                                let Voc = (solarPanelCurve.A/solarPanelCurve.B).ln() / solarPanelCurve.C;
+                                let dV = Voc/(self.exportNOfPoints as f64 - 1.0);
 
-                            // For every dv, calculate IV point
-                            for i in 0..self.exportNOfPoints {
-                                let V = dV * (i as f64);
-                                let I = self.solarPanelCurve.currentAtVoltage(V);
-                                self.outputCSV.push_str(&format!("{:>3},{:>6.2},{:>7.4},{:>9.4}\n", i+1, V, I.abs(), V*I.abs()));
-                                if I < 0.0 {break;}
+                                // For every dv, calculate IV point
+                                for i in 0..self.exportNOfPoints {
+                                    let V = dV * (i as f64);
+                                    let I = solarPanelCurve.currentAtVoltage(V);
+                                    self.outputCSV.push_str(&format!("{:>3},{:>6.2},{:>7.4},{:>9.4}\n", i+1, V, I.abs(), V*I.abs()));
+                                    if I < 0.0 {break;}
+                                }
                             }
-                        }
 
-                        if ui.button("Raw Measurements").clicked() {
-                            commonExport(self);
-                            for (i, point) in self.solarPanelCurve.points.iter().enumerate() {
-                                self.outputCSV.push_str(&format!("{:>3},{:>6.2},{:>7.4},{:>9.4}\n", i+1, point.v, point.i, point.v*point.i));
+                            if raw {
+                                for (i, point) in solarPanelCurve.points.iter().enumerate() {
+                                    self.outputCSV.push_str(&format!("{:>3},{:>6.2},{:>7.4},{:>9.4}\n", i+1, point.voltage, point.current, point.voltage*point.current));
+                                }
                             }
                         }
                     });
 
                     // Add text box
                     ui.add(egui::TextEdit::multiline(&mut self.outputCSV).font(egui::TextStyle::Monospace));
-                });
-            }
-
-            // Configuration window
-            if self.showConfigurationWindow {
-                egui::Window::new("Configurations").show(ctx, |ui| {
-                    egui::Grid::new("configurationWindowGrid")
-                        .num_columns(2)
-                        .spacing([40.0, 4.0])
-                        .striped(true)
-                        .show(ui, |ui| {
-                            // Regression related
-                            ui.label("Regression steps:");
-                            ui.add(egui::DragValue::new(&mut self.regressionSteps).speed(1).clamp_range(1..=100));
-                            ui.end_row();
-
-                            ui.checkbox(&mut self.recalculateRegressionOnCoefficientChanges, "Clean Regression")
-                                .on_hover_text("Reset regression coefficients on every calculation");
-                            if ui.button("Recalculate regression").clicked() { self.updateSolarPanelCurve(); }
-                            ui.end_row();
-
-                            if ui.button("Add synthetic points").clicked() {
-                                self.solarPanelCurve.addPoint( 0.0, 3.0);
-                                self.solarPanelCurve.addPoint(40.0, 2.84);
-                                self.solarPanelCurve.addPoint(50.0,  0.0);
-                                self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
-                            }
-
-
-
-                            ui.end_row();
-                        });
                 });
             }
         });
@@ -191,26 +101,26 @@ impl eframe::App for PocketSolarApp {
             // Info and plot options
             ui.horizontal(|ui| {
                 egui::warn_if_debug_build(ui);
-                ui.label(format!("IV(v) = {:.4} - ({:.4e})exp({:.4}v)", self.solarPanelCurve.A, self.solarPanelCurve.B, self.solarPanelCurve.C));
+                ui.label(format!("IV(v) = {:.4} - ({:.4e})exp({:.4}v)", solarPanelCurve.A, solarPanelCurve.B, solarPanelCurve.C)).on_hover_text("Estimated analytic IV curve equation");
 
                 // Maximum power point
                 ui.separator();
-                ui.label(format!("MPP @ {:.2} V", self.solarPanelCurve.MPPVoltage));
+                ui.label(format!("MPP @ {:.2} V", solarPanelCurve.MPPVoltage)).on_hover_text("Maximum Power Point");
 
                 ui.separator();
-                ui.label("Plot curve:");
-                ui.checkbox(&mut self.plotSolarCurve, "IV");
-                ui.checkbox(&mut self.plotPVcurve, "PV");
+                ui.label("Plot:");
+                ui.checkbox(&mut self.plotSolarCurve, "IV").on_hover_text("Plot the continuous IV curve");
+                ui.checkbox(&mut self.plotPVcurve, "PV").on_hover_text("Plot the continuous PV curve");
+                ui.checkbox(&mut self.plotPoints, "Raw").on_hover_text("Plot the raw measurements");
+                ui.checkbox(&mut self.plotDuty, "Duty Cycle").on_hover_text("Plot the Duty Cycle of each point");
 
                 // Amplification factors
                 ui.separator();
-                ui.label("Ki:").on_hover_text("Current amplification factor relative to 5 V input on the microcontroller");
-                ui.add(egui::DragValue::new(&mut self.Ki).speed(0.1).fixed_decimals(3));
-                ui.label("Kv:").on_hover_text("Voltage amplification factor relative to 5 V input on the microcontroller");
-                ui.add(egui::DragValue::new(&mut self.Kv).speed(0.1).fixed_decimals(3));
-
+                ui.label("Ki:");
+                ui.add(egui::DragValue::new(&mut solarPanelCurve.Ki).speed(0.1).fixed_decimals(3)).on_hover_text("Current amplification factor relative to 5 V input on the Arduino to the real current");
+                ui.label("Kv:");
+                ui.add(egui::DragValue::new(&mut solarPanelCurve.Kv).speed(0.1).fixed_decimals(3)).on_hover_text("Voltage amplification factor relative to 5 V input on the Arduino to the real current");
                 ui.separator();
-                ui.checkbox(&mut self.plotPoints, "Plot Points");
             });
         });
 
@@ -223,7 +133,7 @@ impl eframe::App for PocketSolarApp {
 
                 // Plot continuous IV curve
                 if self.plotSolarCurve {
-                    let curve = self.solarPanelCurve.clone();
+                    let curve = solarPanelCurve.clone();
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
@@ -236,7 +146,7 @@ impl eframe::App for PocketSolarApp {
 
                 // Plot PV curve
                 if self.plotPVcurve {
-                    let curve = self.solarPanelCurve.clone();
+                    let curve = solarPanelCurve.clone();
                     plot_ui.line({
                         Line::new(PlotPoints::from_explicit_callback(
                             move |x| {
@@ -247,18 +157,34 @@ impl eframe::App for PocketSolarApp {
                     });
                 }
 
-                // Plot points on graph
+                // Plot IV points on graph
                 if self.plotPoints {
-                    for point in &self.solarPanelCurve.points {
-                        if point.i < 0.0 { continue; }
+                    for point in &solarPanelCurve.points {
+                        if point.current < 0.0 { continue; }
                         plot_ui.points(
-                            Points::new([point.v, point.i])
-                                .radius(2.0)
+                            Points::new([point.voltage, point.current])
+                                .radius(5.0)
                                 .color(Color32::from_rgb(0, 255, 0)),
+                        );
+                    }
+                }
+
+                // Plot dutyCycle on graph
+                if self.plotDuty {
+                    for point in &solarPanelCurve.points {
+                        if point.current < 0.0 { continue; }
+                        plot_ui.points(
+                            Points::new([point.voltage, point.dutyCycle])
+                                .radius(3.0)
+                                .color(Color32::from_rgb(255, 255, 255)),
                         );
                     }
                 }
             });
         });
+
+        // Repaint always since we have a dynamic changing graph ;)
+        // It's vsynced! Thanks egui
+        ctx.request_repaint();
     }
 }

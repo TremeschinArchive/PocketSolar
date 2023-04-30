@@ -1,17 +1,31 @@
 use crate::*;
 
 BrokenStruct! {
-    pub struct IVPoint {
-        pub v: f64,
-        pub i: f64,
+    pub struct Measurement {
+        pub voltage: f64,
+        pub current: f64,
+        pub dutyCycle: f64,
     }
 }
 
 BrokenStruct! {
     pub struct SolarCurve {
-        pub points: Vec<IVPoint>,
+        // Serial port
+        pub portName: String,
 
-        // IV Curve parameters
+        // Measurements
+        #[default(40)]
+        pub maxPoints: usize,
+        pub points: Vec<Measurement>,
+
+        // Current, voltage amplification factor
+        #[default(1.0)]
+        pub Ki: f64,
+        #[default(1.0)]
+        pub Kv: f64,
+
+        // IV Curve regression parameters
+        // Regression parameters
         pub C: f64,
         pub A: f64,
         pub B: f64,
@@ -21,24 +35,81 @@ BrokenStruct! {
     }
 }
 
-impl PocketSolarApp {
+impl Freewheel for SolarCurve {
+    fn main(this: Arc<RwLock<Self>>) {
+        loop {
+            // Don't spam connections
+            Thread::sleep(Duration::from_millis(100));
 
-    // Short hand for extra functionality
-    pub fn updateSolarPanelCurve(&mut self) {
-        if self.recalculateRegressionOnCoefficientChanges {
-            self.solarPanelCurve.clearRegression();
+            // Store the state of the port we are connecting to detect if it changes
+            let currentPort = this.read().unwrap().portName.clone();
+
+            if let Ok(port) = serialport::new(currentPort.clone(), 9600).open() {
+                let mut reader = BufReader::new(port);
+                let mut lastMessageTimestamp = Instant::now();
+
+                loop {
+                    // Checks if portName has changed externally
+                    if this.read().unwrap().portName != currentPort {break}
+
+                    // No data received for a while, assume broken connection
+                    if lastMessageTimestamp + Duration::from_secs(2) < Instant::now() {
+                        info!("No Arduino message received recently, reconnecting");
+                        break;
+                    }
+
+                    // Read next line if any
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).is_err() {
+                        Thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+
+                    // Update last message time
+                    lastMessageTimestamp = Instant::now();
+
+                    // Arduino Line is "voltage,current,dutyCycle" (int/1023, int/1023, float)
+                    let parts: Vec<f64> = line.trim().split(',').map(|x| x.parse().unwrap_or(0.0)).collect();
+
+                    // Wrong length (incomplete message?)
+                    if parts.len() != 3 {continue}
+
+                    // Ignore if voltage and current are too low (noise, low duty?)
+                    if parts[0] + parts[1] < 0.2 {continue}
+
+                    // // Add new measurement
+                    let mut this = this.write().unwrap();
+
+                    // Create new measurement struct and append it
+                    let measurement = Measurement::default()
+                        .voltage(parts[0] * (5.0/1023.0) * this.Kv)
+                        .current(parts[1] * (5.0/1023.0) * this.Ki)
+                        .dutyCycle(parts[2]);
+
+                    this.points.push(measurement);
+
+                    // Remove old measurements (we push on the end, delete on start)
+                    while this.points.len() > this.maxPoints {
+                        this.points.remove(0);
+                    }
+
+                    // Update coefficients
+                    this.update();
+                }
+            }
         }
-
-        // Calculate regression after measurement
-        self.solarPanelCurve.calculateCoefficients(self.regressionSteps);
-        self.solarPanelCurve.calculateMPP();
     }
 }
 
 impl SolarCurve {
+    pub fn update(&mut self) {
+        self.clearRegression();
+        self.calculateCoefficients();
+        self.calculateMPP();
+    }
 
-    // Returns the coefficients
-    pub fn calculateCoefficients(&mut self, steps: i64) {
+    // Calculates next step and / or initial coefficients
+    pub fn calculateCoefficients(&mut self) {
 
         // If we even have some points
         if self.points.len() > 0 {
@@ -50,13 +121,13 @@ impl SolarCurve {
             let maxY = self.minMaxY().unwrap().1;
 
             // Repeat until we get a nice estimate of B
-            for _ in 1..=steps {
+            for _ in 1..=50 {
                 // Update A coefficient based on last iteration values
                 self.A = maxY + self.B;
 
                 // X, Y points for linear regression
-                let x = Vec::from_iter(self.points.iter().map( |point|  point.v                ));
-                let y = Vec::from_iter(self.points.iter().map( |point| (self.A*(1.0) - point.i).ln() ));
+                let x = Vec::from_iter(self.points.iter().map( |point|  point.voltage                      ));
+                let y = Vec::from_iter(self.points.iter().map( |point| (self.A*(1.0) - point.current).ln() ));
 
                 // Linear regression
                 let sumX:   f64 = x.iter().sum();
@@ -84,6 +155,9 @@ impl SolarCurve {
 
         while self.powerAtVoltage(self.MPPVoltage + delta) > self.powerAtVoltage(self.MPPVoltage) {
             self.MPPVoltage += delta;
+
+            // Don't dead-lock on bad regression
+            if self.MPPVoltage > 1000.0 {break;}
         }
     }
 
@@ -100,7 +174,7 @@ impl SolarCurve {
     // Minimum and maximum value of the curve
     fn minMaxY(&self) -> Option<(f64, f64)> {
         if self.points.len() == 0 {return None;}
-        let mut yValues = Vec::from_iter(self.points.iter().map(|point| point.i));
+        let mut yValues = Vec::from_iter(self.points.iter().map(|point| point.current));
         yValues.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let minY = yValues.first().unwrap();
         let maxY = yValues.last().unwrap();
@@ -117,9 +191,5 @@ impl SolarCurve {
     pub fn clear(&mut self) {
         self.points = Vec::new();
         self.clearRegression();
-    }
-
-    pub fn addPoint(&mut self, x: f64, y: f64) {
-        self.points.push(IVPoint { v: x, i: y });
     }
 }
