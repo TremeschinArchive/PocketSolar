@@ -3,10 +3,11 @@
 #![allow(unused_must_use)]
 use Broken::*;
 
-import!{PocketSolar}
+BrokenImport!{PocketSolar}
 
 use egui::plot::Line;
 use egui::plot::Plot;
+use egui::plot::PlotBounds;
 use egui::plot::PlotPoints;
 use egui::plot::Points;
 use egui::Color32;
@@ -22,16 +23,6 @@ BrokenStruct! {
     pub struct PocketSolarApp {
         #[serde(skip)]
         solarPanelCurve: Arc<RwLock<SolarCurve::SolarCurve>>,
-
-        // Plot options
-        #[default(true)]
-        plotPoints: bool,
-        #[default(true)]
-        plotDuty: bool,
-        #[default(true)]
-        plotSolarCurve: bool,
-        #[default(true)]
-        plotPVcurve: bool,
 
         // Export Window
         showExportWindow: bool,
@@ -59,7 +50,7 @@ impl PocketSolarApp {
         };
 
         // Spin the SolarCurve thread
-        app.solarPanelCurve = SolarCurve::SolarCurve::freewheelDefault();
+        app.solarPanelCurve = SolarCurve::SolarCurve::spin_default();
         return app;
     }
 }

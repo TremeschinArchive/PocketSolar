@@ -1,6 +1,7 @@
 use crate::*;
 
 BrokenStruct! {
+    #[derive(Clone)]
     pub struct Measurement {
         pub voltage: f64,
         pub current: f64,
@@ -9,12 +10,13 @@ BrokenStruct! {
 }
 
 BrokenStruct! {
+    #[derive(Clone)]
     pub struct SolarCurve {
         // Serial port
         pub portName: String,
 
         // Measurements
-        #[default(40)]
+        #[default(100)]
         pub maxPoints: usize,
         pub points: Vec<Measurement>,
 
@@ -28,6 +30,7 @@ BrokenStruct! {
         // Regression parameters
         pub C: f64,
         pub A: f64,
+        #[default(1.0)]
         pub B: f64,
 
         // MPP
@@ -35,7 +38,7 @@ BrokenStruct! {
     }
 }
 
-impl Freewheel for SolarCurve {
+impl SpinWhole for SolarCurve {
     fn main(this: Arc<RwLock<Self>>) {
         loop {
             // Don't spam connections
@@ -103,7 +106,9 @@ impl Freewheel for SolarCurve {
 
 impl SolarCurve {
     pub fn update(&mut self) {
-        self.clearRegression();
+        if self.A.is_nan() || self.B.is_nan() || self.C.is_nan() {
+            self.clearRegression();
+        }
         self.calculateCoefficients();
         self.calculateMPP();
     }
@@ -113,21 +118,26 @@ impl SolarCurve {
 
         // If we even have some points
         if self.points.len() > 0 {
-
-            // Initial guess of B value
-            if self.B == 0.0 {self.B = 0.5;}
+            let maxVoltage = self.minMaxX().unwrap()[1];
 
             // This is one of the hardest part, find the perfect initial value I(0)
-            let maxY = self.minMaxY().unwrap().1;
+            // Get the average of all points up to X% nominal voltage
+            let pointsBelowPercent = self.points.iter().filter(|point| point.voltage < maxVoltage*0.2).map(|point| point.current).collect::<Vec<f64>>();
+            let maxY = pointsBelowPercent.iter().sum::<f64>() / pointsBelowPercent.len() as f64;
 
             // Repeat until we get a nice estimate of B
-            for _ in 1..=50 {
+            for _ in 1..=4 {
+                // We are overshooting the estimate, decrease B as it found a local optima
+                if self.currentAtVoltage(0.0) > maxY*1.05 {
+                    self.B *= 0.8;
+                }
+
                 // Update A coefficient based on last iteration values
                 self.A = maxY + self.B;
 
                 // X, Y points for linear regression
-                let x = Vec::from_iter(self.points.iter().map( |point|  point.voltage                      ));
-                let y = Vec::from_iter(self.points.iter().map( |point| (self.A*(1.0) - point.current).ln() ));
+                let x = Vec::from_iter(self.points.iter().map(|point| point.voltage));
+                let y = Vec::from_iter(self.points.iter().map(|point| (self.A - point.current).abs().ln()));
 
                 // Linear regression
                 let sumX:   f64 = x.iter().sum();
@@ -143,7 +153,11 @@ impl SolarCurve {
                 // On the linearized iv curve, for y = A - Be^Cx, we have ln(y) = -Cx + ln(B)
                 // So C = a and ln(B) = b
                 self.C = a;
-                self.B = exp(b);
+                self.B = exp(b) * 0.40;
+
+                // The point where the
+                let maxVoltageAnalytic = (self.A.ln() - self.B.ln())/self.C;
+                self.C *= (maxVoltageAnalytic/maxVoltage) * 0.99;
             }
         }
     }
@@ -171,19 +185,35 @@ impl SolarCurve {
         return self.A - self.B*exp(self.C*voltage);
     }
 
-    // Minimum and maximum value of the curve
-    fn minMaxY(&self) -> Option<(f64, f64)> {
+    pub fn MPPPower(&self) -> f64 {
+        return self.powerAtVoltage(self.MPPVoltage);
+    }
+
+    // Minimum and maximum Y value of the curve
+    pub fn minMaxY(&self) -> Option<[f64; 2]> {
         if self.points.len() == 0 {return None;}
-        let mut yValues = Vec::from_iter(self.points.iter().map(|point| point.current));
-        yValues.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let minY = yValues.first().unwrap();
-        let maxY = yValues.last().unwrap();
-        return Some((*minY, *maxY));
+        let (mut min, mut max): (f64, f64) = (0.0, 0.0);
+        for point in self.points.iter() {
+            max = max.max(point.current);
+            min = min.min(point.current);
+        }
+        return Some([min, max]);
+    }
+
+    // Minimum and maximum X value of the curve
+    pub fn minMaxX(&self) -> Option<[f64; 2]> {
+        if self.points.len() == 0 {return None;}
+        let (mut min, mut max): (f64, f64) = (0.0, 0.0);
+        for point in self.points.iter() {
+            max = max.max(point.voltage);
+            min = min.min(point.voltage);
+        }
+        return Some([min, max]);
     }
 
     pub fn clearRegression(&mut self) {
         self.A = 0.0;
-        self.B = 0.0;
+        self.B = 1.0;
         self.C = 0.0;
     }
 

@@ -105,14 +105,7 @@ impl eframe::App for PocketSolarApp {
 
                 // Maximum power point
                 ui.separator();
-                ui.label(format!("MPP @ {:.2} V", solarPanelCurve.MPPVoltage)).on_hover_text("Maximum Power Point");
-
-                ui.separator();
-                ui.label("Plot:");
-                ui.checkbox(&mut self.plotSolarCurve, "IV").on_hover_text("Plot the continuous IV curve");
-                ui.checkbox(&mut self.plotPVcurve, "PV").on_hover_text("Plot the continuous PV curve");
-                ui.checkbox(&mut self.plotPoints, "Raw").on_hover_text("Plot the raw measurements");
-                ui.checkbox(&mut self.plotDuty, "Duty Cycle").on_hover_text("Plot the Duty Cycle of each point");
+                ui.label(format!("MPP @ {:.02} V, {:.02} W", solarPanelCurve.MPPVoltage, solarPanelCurve.MPPPower())).on_hover_text("Maximum Power Point");
 
                 // Amplification factors
                 ui.separator();
@@ -126,61 +119,80 @@ impl eframe::App for PocketSolarApp {
 
         // Main plot
         egui::CentralPanel::default().show(ctx, |ui| {
+            let plotHeight = (ui.available_height()/3.0) * 0.99;
+            let plotAspectRatio = ((ui.available_height()/3.0)/ui.available_width()) as f64;
 
-            // Main Solar Panel Curves Plot
-            Plot::new("solarPanelCurvesPlot")
-                .show(ui, |plot_ui| {
+            // "Overhshoot" bounds
+            let extraBoundX = 1.02;
+            let extraBoundY = 1.0 + extraBoundX*plotAspectRatio;
 
-                // Plot continuous IV curve
-                if self.plotSolarCurve {
-                    let curve = solarPanelCurve.clone();
-                    plot_ui.line({
-                        Line::new(PlotPoints::from_explicit_callback(
-                            move |x| {
-                                curve.currentAtVoltage(x)
-                            }, .., 512,
-                        ))
-                        .width(5.0)
-                    });
-                }
+            // For Duty Cycle plot
+            let maxVoltage = solarPanelCurve.minMaxX().unwrap_or([0.0, 0.0])[1];
 
-                // Plot PV curve
-                if self.plotPVcurve {
-                    let curve = solarPanelCurve.clone();
-                    plot_ui.line({
-                        Line::new(PlotPoints::from_explicit_callback(
-                            move |x| {
-                                x*(7.0/260.0)*curve.currentAtVoltage(x)
-                            }, .., 512,
-                        ))
-                        .width(5.0)
-                    });
-                }
+            Plot::new("ivCurve").height(plotHeight).allow_drag(false).allow_scroll(false).allow_zoom(false).show(ui, |plot_ui| {
+                plot_ui.set_plot_bounds(PlotBounds::from_min_max([0.0, 0.0], [
+                    solarPanelCurve.minMaxX().unwrap_or([0.0, 0.0])[1]*extraBoundX,
+                    solarPanelCurve.minMaxY().unwrap_or([5.0, 5.0])[1]*extraBoundY
+                ]));
 
-                // Plot IV points on graph
-                if self.plotPoints {
-                    for point in &solarPanelCurve.points {
-                        if point.current < 0.0 { continue; }
-                        plot_ui.points(
-                            Points::new([point.voltage, point.current])
-                                .radius(5.0)
-                                .color(Color32::from_rgb(0, 255, 0)),
-                        );
-                    }
-                }
+                // Plot analytic IV curve
+                let curve = solarPanelCurve.clone();
+                plot_ui.line({
+                    Line::new(PlotPoints::from_explicit_callback(
+                        move |x| {
+                            curve.currentAtVoltage(x)
+                        }, .., 512,
+                    ))
+                    .width(5.0)
+                });
 
-                // Plot dutyCycle on graph
-                if self.plotDuty {
-                    for point in &solarPanelCurve.points {
-                        if point.current < 0.0 { continue; }
-                        plot_ui.points(
-                            Points::new([point.voltage, point.dutyCycle])
-                                .radius(3.0)
-                                .color(Color32::from_rgb(255, 255, 255)),
-                        );
-                    }
+                // Plot raw measurements
+                for point in &solarPanelCurve.points {
+                    if point.current < 0.0 { continue; }
+                    plot_ui.points(
+                        Points::new([point.voltage, point.current])
+                            .radius(2.0)
+                            .color(Color32::from_rgb(0, 100, 255)),
+                    );
                 }
             });
+
+            Plot::new("pvCurve").height(plotHeight).allow_drag(false).allow_scroll(false).allow_zoom(false).show_background(false).show(ui, |plot_ui| {
+                plot_ui.set_plot_bounds(PlotBounds::from_min_max([0.0, 0.0], [
+                    maxVoltage*extraBoundX,
+                    solarPanelCurve.MPPPower()*extraBoundY]
+                ));
+
+                // Plot analytic PV curve
+                let curve = solarPanelCurve.clone();
+                plot_ui.line({
+                    Line::new(PlotPoints::from_explicit_callback(
+                        move |x| {
+                            x*curve.currentAtVoltage(x)
+                        }, .., 512,
+                    ))
+                    .width(5.0)
+                    .color(Color32::from_rgb(0, 0, 255))
+                });
+            });
+
+            Plot::new("dutyCycle").height(plotHeight).allow_drag(false).allow_scroll(false).allow_zoom(false).show(ui, |plot_ui| {
+                plot_ui.set_plot_bounds(PlotBounds::from_min_max([0.0, 0.0], [
+                    maxVoltage*extraBoundX,
+                    extraBoundY]
+                ));
+
+                // Plot dutyCycle on graph
+                for point in &solarPanelCurve.points {
+                    if point.current < 0.0 { continue; }
+                    plot_ui.points(
+                        Points::new([point.voltage, point.dutyCycle])
+                            .radius(3.0)
+                            .color(Color32::from_rgb(255, 255, 255)),
+                    );
+                }
+            });
+
         });
 
         // Repaint always since we have a dynamic changing graph ;)
