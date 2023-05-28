@@ -47,7 +47,11 @@ impl SpinWhole for SolarCurve {
             // Store the state of the port we are connecting to detect if it changes
             let currentPort = this.read().unwrap().portName.clone();
 
-            if let Ok(port) = serialport::new(currentPort.clone(), 9600).open() {
+            if let Ok(mut port) = serialport::new(currentPort.clone(), 9600).open() {
+                // Fix unecessary Windows read blockage
+                port.set_flow_control(serialport::FlowControl::Hardware).unwrap();
+                port.write_data_terminal_ready(true).unwrap();
+
                 let mut reader = BufReader::new(port);
                 let mut lastMessageTimestamp = Instant::now();
 
@@ -157,7 +161,7 @@ impl SolarCurve {
 
                 // The point where the
                 let maxVoltageAnalytic = (self.A.ln() - self.B.ln())/self.C;
-                self.C *= (maxVoltageAnalytic/maxVoltage) * 0.99;
+                self.C *= (maxVoltageAnalytic/maxVoltage) * 0.96;
             }
         }
     }

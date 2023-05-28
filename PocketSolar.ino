@@ -11,6 +11,7 @@
 #define MEASURE_VOLTAGE_PIN A0
 #define MEASURE_CURRENT_PIN A1
 
+// Global variables
 float dutyCycle = 0.0;
 
 void setup() {
@@ -40,12 +41,11 @@ void loop() {
     Serial.println(dutyCycle, 3);
 }
 
-// An effort to make a better delayMicroseconds() function
-// https://www.arduino.cc/reference/en/language/functions/time/delaymicroseconds/
-// delayMicroseconds() "the largest value that will produce an accurate delay is 16383"
-void betterDelayMicroseconds(unsigned long us) {
+// An effort to make a better delay function
+void betterDelaySeconds(float seconds) {
     unsigned long start = micros();
-    while(micros() < start + us);
+    unsigned long wait  = seconds * 1000000;
+    while(micros() < start + wait);
 }
 
 // Digital PWM on a pin, at a certain dutyCycle, for a certain duration
@@ -53,19 +53,19 @@ void betterDelayMicroseconds(unsigned long us) {
 // NOTE: duration = max(1/frequency, duration)
 void pwm(int pin, float dutyCycle, float duration) {
 
-    // Start time
-    unsigned long start = millis();
+    // Calculate how many PWM cycles to do
+    long int manyPwm = (long int)(duration * PWM_FREQUENCY);
 
     // Calculate on and off time based on duty cycle
     float onTime  = PWM_PERIOD * dutyCycle;
     float offTime = PWM_PERIOD * (1 - dutyCycle);
 
-    // Loop until the time is up
-    while(millis() < start + (unsigned long)(PWM_SECONDS_PER_MEASURE*1000.0)){
-        digitalWrite(pin, HIGH);
-        betterDelayMicroseconds(onTime * 1000000);
+    // Loop until the time is up, end with the pin HIGH
+    for (long int i=0; i<manyPwm; i++) {
         digitalWrite(pin, LOW);
-        betterDelayMicroseconds(offTime * 1000000);
+        betterDelaySeconds(onTime);
+        digitalWrite(pin, HIGH);
+        betterDelaySeconds(offTime);
     }
 }
 
